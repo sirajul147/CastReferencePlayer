@@ -956,7 +956,7 @@ sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
                         isSeries: true,
                         currentTime: 0,
                         imageList: media.customData.imageList,
-                        episodeDetail: 'S0' + next.series[0].season_number + ' E0' + next.series[0].episode_number,
+                        episodeDetail: 'S' + self.zeroPad_(next.series[0].season_number, 2) + ' E' + self.zeroPad_(next.series[0].episode_number, 2),
                         href: next._links.media.href,
                         typeofItem: "Episode"
                     };
@@ -1014,6 +1014,20 @@ sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
             return true;
         });
     };
+
+/**
+ * Padding with zero
+ * @param n
+ * @param width
+ * @param z
+ * @returns {*}
+ * @private
+ */
+sampleplayer.CastPlayer.prototype.zeroPad_ = function(n, width, z) {
+    z = z || '0';
+    n = n + '';
+    return n.length >= width ? n : new Array(width - n.length + 1).join(z) + n;
+};
 
 /**
  * Loads media and tracks info into media manager.
