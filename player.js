@@ -230,6 +230,11 @@ sampleplayer.CastPlayer = function (element) {
     this.metadataLoaded_ = false;
 
     /**
+     * Notification Element
+     */
+    this.notificationComing_ = document.getElementsByClassName('notification-coming')[0];
+
+    /**
      * The media element.
      * @private {HTMLMediaElement}
      */
@@ -956,7 +961,8 @@ sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
                         isSeries: true,
                         currentTime: 0,
                         imageList: media.customData.imageList,
-                        episodeDetail: 'S0' + next.series[0].season_number + ' E0' + next.series[0].episode_number,
+                        episodeDetail: 'S' + self.zeroPad_(next.series[0].season_number, 2) + ' E' + self.zeroPad_(next.series[0].episode_number, 2),
+                        episodeNumber: 'E' + self.zeroPad_(next.series[0].episode_number, 2),
                         href: next._links.media.href,
                         typeofItem: "Episode"
                     };
@@ -1014,6 +1020,20 @@ sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
             return true;
         });
     };
+
+/**
+ * Padding with zero
+ * @param n
+ * @param width
+ * @param z
+ * @returns {*}
+ * @private
+ */
+sampleplayer.CastPlayer.prototype.zeroPad_ = function(n, width, z) {
+    z = z || '0';
+    n = n + '';
+    return n.length >= width ? n : new Array(width - n.length + 1).join(z) + n;
+};
 
 /**
  * Loads media and tracks info into media manager.
@@ -1583,8 +1603,6 @@ sampleplayer.CastPlayer.prototype.onStop_ = function (event) {
  */
 sampleplayer.CastPlayer.prototype.onEnded_ = function () {
     this.log_('onEnded');
-    var currentQueue = this.mediaManager_.getMediaQueue();
-    console.log('Diagnal -> current:', currentQueue);
     this.setState_(sampleplayer.State.IDLE, true);
     this.hidePreviewMode_();
     this.sendProgress_();
@@ -1626,7 +1644,6 @@ sampleplayer.CastPlayer.prototype.onAbort_ = function () {
     this.hidePreviewMode_();
 };
 
-
 /**
  * Called periodically during playback, to notify changes in playback position.
  * We transition to PLAYING state, if we were in BUFFERING or LOADING state.
@@ -1640,6 +1657,24 @@ sampleplayer.CastPlayer.prototype.onProgress_ = function () {
         this.setState_(sampleplayer.State.PLAYING, false);
     }
     this.updateProgress_();
+
+    // show coming next
+    var self = this;
+    var duration = this.mediaElement_.duration;
+    var currentTime = this.mediaElement_.currentTime;
+    if((duration - currentTime) < 120) {
+        if(self.notificationComing_.style.display == 'block')
+            return;
+        console.log('Diagnal Show coming next');
+        self.notificationComing_.style.display = 'block';
+        var media = this.mediaManager_.getMediaInformation();
+        var currentQueue = this.mediaManager_.getMediaQueue().getItems();
+        var coming_next_item = currentQueue[1];
+        // Set the values
+        document.getElementById('episode_title').innerHTML = coming_next_item.media.metadata.title;
+        document.getElementById('episode_number').innerHTML = coming_next_item.media.customData.episodeNumber;
+        console.log('Diagnal -> current:', currentQueue);
+    }
 };
 
 
@@ -1752,6 +1787,7 @@ sampleplayer.CastPlayer.prototype.onCancelPreload_ = function (event) {
  */
 sampleplayer.CastPlayer.prototype.onLoad_ = function (event) {
     this.log_('onLoad_');
+    this.notificationComing_.style.display = 'none';
     this.cancelDeferredPlay_('new media is loaded');
     this.load(new cast.receiver.MediaManager.LoadInfo(
         /** @type {!cast.receiver.MediaManager.LoadRequestData} */ (event.data),
