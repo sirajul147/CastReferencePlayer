@@ -782,7 +782,12 @@ sampleplayer.CastPlayer.prototype.loadAudio_ = function (info) {
     this.loadDefault_(info);
 };
 
-
+/**
+ * MMAPI Ticket Call
+ * @param data
+ * @returns {*}
+ * @private
+ */
 sampleplayer.CastPlayer.prototype.getTicket_= function (data) {
     return fetch(data.baseURL + 'player/drm/ticket', {
         method: "POST",
@@ -815,10 +820,8 @@ sampleplayer.CastPlayer.prototype.loadVideo_ = function (info) {
     console.log('Diagnal Input Data', info);
     this.getTicket_(customData).then(function (ticketData) {
 
-        console.log('Diagnal -> ticket:', ticketData);
-        if(!ticketData) {
-            this.setState_(sampleplayer.State.IDLE, true);
-            this.hidePreviewMode_();
+        if('status' in ticketData) {
+            console.log('Diagnal -> ticket error:', ticketData);
             return false;
         }
 
@@ -892,6 +895,25 @@ sampleplayer.CastPlayer.prototype.loadVideo_ = function (info) {
     });
 };
 
+/**
+ * Check Media access
+ * @param mediaId
+ * @returns {*}
+ * @private
+ */
+sampleplayer.CastPlayer.prototype.checkMediaAccess_ = function (mediaId) {
+    var media = this.mediaManager_.getMediaInformation();
+    return fetch(media.customData.baseURL + 'accounts/media/' + mediaId + '/access', {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "XSSESSION": media.customData.sessionToken
+        }
+    }).then(function (res) {
+        return res.json()
+    });
+};
+
 sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
     function (message) {
 
@@ -905,6 +927,7 @@ sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
         }).then(function (content) {
             if(!content.series.length)
                 return;
+
             var series_id = content.series[0].id;
             var season_id = content.series[0].seasons[0].id;
             var episode_id = content.series[0].seasons[0].episodes[0].id;
@@ -913,70 +936,78 @@ sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
             }).then(function (next) {
 
                 console.log('Diagnal Next data', next);
-                if('status' in next) {
+                if ('status' in next) {
                     console.log('Diagnal Reached Last Episode');
                     return;
                 }
 
-                var customData = {
-                    mediaId: next.media_id,
-                    baseURL: media.customData.baseURL,
-                    deviceID: media.customData.deviceID,
-                    sessionToken: media.customData.sessionToken,
-                    isSeries: true,
-                    currentTime: 0,
-                    imageList: media.customData.imageList,
-                    episodeDetail: 'S0' + next.series[0].season_number + ' E0' + next.series[0].episode_number,
-                    href: next._links.media.href,
-                    typeofItem: "Episode"
-                };
-
-                var streams = next.streams.web, contentId = null;
-                streams.forEach(function (stream) {
-                    if (!('drm' in stream))
-                        return true;
-                    if (stream.drm.type == 'playready-dash') {
-                        customData.streamID = stream.id;
-                        contentId = stream.src;
+                self.checkMediaAccess_(next.media_id).then(function (res) {
+                    console.log('Media Access', res);
+                    if (res.status != "ok") {
+                        console.log('Diagnal -> Media access false, skip queue');
+                        return;
                     }
+
+                    var customData = {
+                        mediaId: next.media_id,
+                        baseURL: media.customData.baseURL,
+                        deviceID: media.customData.deviceID,
+                        sessionToken: media.customData.sessionToken,
+                        isSeries: true,
+                        currentTime: 0,
+                        imageList: media.customData.imageList,
+                        episodeDetail: 'S0' + next.series[0].season_number + ' E0' + next.series[0].episode_number,
+                        href: next._links.media.href,
+                        typeofItem: "Episode"
+                    };
+
+                    var streams = next.streams.web, contentId = null;
+                    streams.forEach(function (stream) {
+                        if (!('drm' in stream))
+                            return true;
+                        if (stream.drm.type == 'playready-dash') {
+                            customData.streamID = stream.id;
+                            contentId = stream.src;
+                        }
+                    });
+
+                    var images = [];
+                    var imageList = media.customData.imageList;
+                    imageList.forEach(function (img) {
+                        for (var type in img) {
+                            var format = img[type];
+                            next.images.forEach(function (next_img) {
+                                if (next_img.type == type) {
+                                    images.push({
+                                        url: next_img.format[format].source
+                                    });
+                                }
+                            });
+                        }
+                    });
+
+                    var queueItem = new cast.receiver.media.QueueItem();
+                    queueItem.autoplay = true;
+                    queueItem.playbackDuration = next.details.length;
+                    queueItem.customData = customData;
+                    queueItem.media = {
+                        contentId: contentId,
+                        contentType: "application/dash+xml",
+                        duration: next.details.length,
+                        streamType: "BUFFERED",
+                        currentTime: 0,
+                        metadata: {
+                            images: images,
+                            metadataType: 1,
+                            title: next.titles.default,
+                            subtitle: next.medium_descriptions.default || next.long_descriptions.default,
+                        },
+                        customData: customData
+                    };
+
+                    var items = [queueItem];
+                    self.mediaManager_.insertQueueItems(items);
                 });
-
-                var images = [];
-                var imageList = media.customData.imageList;
-                imageList.forEach(function (img) {
-                    for(var type in img) {
-                        var format = img[type];
-                        next.images.forEach(function (next_img) {
-                            if(next_img.type == type) {
-                                images.push({
-                                    url: next_img.format[format].source
-                                });
-                            }
-                        });
-                    }
-                });
-
-                var queueItem = new cast.receiver.media.QueueItem();
-                queueItem.autoplay = true;
-                queueItem.playbackDuration = next.details.length;
-                queueItem.customData = customData;
-                queueItem.media = {
-                    contentId: contentId,
-                    contentType: "application/dash+xml",
-                    duration: next.details.length,
-                    streamType: "BUFFERED",
-                    currentTime: 0,
-                    metadata: {
-                        images: images,
-                        metadataType: 1,
-                        title: next.titles.default,
-                        subtitle: next.medium_descriptions.default || next.long_descriptions.default,
-                    },
-                    customData: customData
-                };
-
-                var items = [queueItem];
-                self.mediaManager_.insertQueueItems(items);
             });
         }).catch(function (err) {
             console.log('Diagnal -> Episode Parse Error', err);
@@ -1500,6 +1531,7 @@ sampleplayer.CastPlayer.prototype.onPause_ = function () {
         this.setState_(sampleplayer.State.PAUSED, false);
     }
     this.updateProgress_();
+    this.sendProgress_();
 };
 
 
@@ -1555,8 +1587,33 @@ sampleplayer.CastPlayer.prototype.onEnded_ = function () {
     console.log('Diagnal -> current:', currentQueue);
     this.setState_(sampleplayer.State.IDLE, true);
     this.hidePreviewMode_();
+    this.sendProgress_();
 };
 
+/**
+ * Send playback progress to Media Maker
+ * @private
+ */
+sampleplayer.CastPlayer.prototype.sendProgress_ = function () {
+    var self = this;
+    var media = this.mediaManager_.getMediaInformation();
+    fetch(media.customData.baseURL + 'player/progress', {
+            method: 'PUT',
+            body: JSON.stringify({
+                media_id: media.customData.mediaId,
+                progress: Math.round(self.mediaElement_.currentTime)
+            }),
+            headers: {
+                "Content-Type": "application/json",
+                "XSSESSION": media.customData.sessionToken
+            }
+        }
+    ).then(function (res) {
+        return res.json();
+    }).then(function (res) {
+        console.log('Send progress', res);
+    });
+};
 
 /**
  * Called when media has been aborted. We transition to the IDLE state.

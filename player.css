@@ -242,9 +242,6 @@ body {
 }
 
 .player .preview-mode-info {
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
     padding-bottom: 54px;
     display: none;
     margin: -143px 0 0 0;
@@ -265,6 +262,9 @@ body {
 }
 
 .player .preview-mode-info .preview-mode-text {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
     width: 100%;
     align-self: flex-end;
 }
