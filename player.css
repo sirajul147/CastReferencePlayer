@@ -16,6 +16,7 @@
 
 /* NOTE: this must be first statement in file to work on device */
 @import url(https://fonts.googleapis.com/css?family=Open+Sans:300,400);
+@import url('https://fonts.googleapis.com/css?family=Titillium+Web');
 
 /* ------------------------------------------------- */
 /* Animations                                        */
@@ -45,7 +46,7 @@ body {
     background-position: center;
     background-repeat: no-repeat;
     color: #f1f1f1;
-    font-family: 'Open Sans',sans-serif;
+    font-family: 'Titillium Web', 'Open Sans',sans-serif;
     font-weight: 300;
     position: absolute;
     left: 0;
@@ -58,15 +59,29 @@ body {
     display: none;
     background-size: contain;
     background-repeat: no-repeat;
-    background-position: bottom;
-    position: absolute;
-    bottom: 50%;
-    left: 50%;
-    background-image: url("assets/logo.png");
-    margin-bottom: -96px;
-    margin-left: -96px;
-    width: 192px;
-    height: 192px;
+    position: fixed;
+    top: 50px;
+    left: 70px;
+    background-image: url("assets/dimsum-logo.png");
+    width: 400px;
+    height: 100px;
+}
+
+.player .logo .ready {
+    margin-top: 10px;
+    width: auto;
+    position: relative;
+    top: 50px;
+}
+.player .logo .ready img {
+    position: relative;
+    display: inline-block;
+    height: auto;
+    width: 50px;
+}
+.player .logo .ready span {
+    font-size: 3em;
+    margin-left: 10px;
 }
 
 .player .placeholder-image {
@@ -195,7 +210,7 @@ body {
 }
 
 .player .progressBar {
-    background-color: rgb(250, 178, 49);
+    background-color: rgb(255, 255, 255);
 }
 
 .player .controls-progress {
@@ -707,6 +722,9 @@ body {
 }
 
 .player[state="idle"] .logo {
+    display: block;
+}
+.player[state="loading"] .logo {
     display: block;
 }
 

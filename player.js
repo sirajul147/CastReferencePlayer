@@ -1004,9 +1004,24 @@ sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
                         },
                         customData: customData
                     };
-
                     var items = [queueItem];
                     self.mediaManager_.insertQueueItems(items);
+
+                    // var mediaItem = new cast.receiver.media.MediaInformation();
+                    // mediaItem.contentId = contentId;
+                    // mediaItem.contentType = "application/dash+xml";
+                    // mediaItem.duration = next.details.length;
+                    // mediaItem.streamType = "BUFFERED";
+                    // mediaItem.currentTime = 0;
+                    // mediaItem.metadata = {
+                    //     images: images,
+                    //     metadataType: 1,
+                    //     title: next.titles.default,
+                    //     subtitle: next.medium_descriptions.default || next.long_descriptions.default,
+                    // };
+                    // mediaItem.customData = customData;
+                    // self.preload(mediaItem);
+
                 });
             });
         }).catch(function (err) {
