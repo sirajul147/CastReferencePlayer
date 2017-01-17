@@ -869,7 +869,8 @@ sampleplayer.CastPlayer.prototype.loadVideo_ = function (info) {
                 var host = new cast.player.api.Host({
                     'url': url,
                     'mediaElement': self.mediaElement_,
-                    'licenseUrl': licenseUrl
+                    'licenseUrl': licenseUrl,
+                    'useRelativeCueTimestamps': true
                 });
                 host.onError = loadErrorCallback;
                 self.player_ = new cast.player.api.Player(host);
@@ -887,16 +888,6 @@ sampleplayer.CastPlayer.prototype.loadVideo_ = function (info) {
         }
         self.loadMediaManagerInfo_(info, !!protocolFunc);
         self.queueNextEpisode_(info.message);
-
-        var tracks = info.message.media.tracks;
-        tracks.forEach(function (track) {
-            console.log('Diagnal -> Add Captions track', track);
-            var trackEl = document.createElement('track');
-            trackEl.src = track.trackContentId;
-            trackEl.kind ="captions";
-            self.mediaElement_.appendChild(trackEl);
-        });
-
         return wasPreloaded;
 
     }).catch(function (err) {
@@ -1839,6 +1830,7 @@ sampleplayer.CastPlayer.prototype.changeAudioTrack = function() {
     }
 
     if (i !== currentLanguage) {
+        this.setState_(sampleplayer.State.BUFFERING, true);
         this.player_.reload();
     }
 };
@@ -1851,15 +1843,10 @@ sampleplayer.CastPlayer.prototype.changeAudioTrack = function() {
  */
 sampleplayer.CastPlayer.prototype.onEditTracksInfo_ = function (event) {
     this.log_('onEditTracksInfo');
-    this.onEditTracksInfoOrig_(event);
     console.log('Diagnal Change Track -> ', event.data);
+    this.onEditTracksInfoOrig_(event);
+
     if (event.data.activeTrackIds.length == 1) {
-        var protocol = this.player_.getStreamingProtocol();
-        var streamCount = protocol.getStreamCount();
-        for (var i = 0; i < streamCount; i++) {
-            var streamInfo = protocol.getStreamInfo(i);
-            console.log('Diagnal Stream', streamInfo);
-        }
         this.player_.enableCaptions(true);
     } else {
         this.changeAudioTrack(event.data.activeTrackIds[1]);
