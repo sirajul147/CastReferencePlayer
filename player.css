@@ -60,13 +60,13 @@ body {
     background-repeat: no-repeat;
     background-position: bottom;
     position: absolute;
-    bottom: 50%;
+    bottom: 45%;
     left: 50%;
     background-image: url("assets/logo.png");
     margin-bottom: -96px;
-    margin-left: -96px;
-    width: 192px;
-    height: 192px;
+    margin-left: -171px;
+    width: 350px;
+    height: 343px;
 }
 
 .player .placeholder-image {
@@ -733,7 +733,7 @@ body {
      float: left;
      background: #2D2D2D;
      opacity: 0.8;
-     min-height: 50px;
+     min-height: 80px;
      padding: 8px 15px !important;
      width: auto;
      position: absolute;
@@ -745,8 +745,8 @@ body {
  }
 
 .notification-coming .alert-btn {
-    width: 50px;
-    height: 50px;
+    width: 80px;
+    height: 80px;
     float: left;
     text-align: center;
     background: #ff0032;
@@ -757,10 +757,10 @@ body {
 }
 .notification-coming .alert-btn img{
     margin-left: 2px;
-    top: -2px;
+    top: 14px;
     position: relative;
-    width: 16px;
-    height: 16px;
+    width: 27px;
+    height: 27px;
     vertical-align: inherit;
 }
 .notification-coming .fa-forward{
@@ -775,13 +775,13 @@ body {
 }
 
 .notification-coming h1{
-    font-size: 15px;
+    font-size: 22px;
     margin: 4px 0 5px;
     padding: 0;
     text-transform: uppercase;
 }
 .notification-coming span{
-    font-size: 14px;
+    font-size: 25px;
     margin: 0 2px 0 0;
     padding: 0;
     text-transform: uppercase;

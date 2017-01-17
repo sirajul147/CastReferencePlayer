@@ -82,6 +82,9 @@ sampleplayer.CastPlayer = function (element) {
     if (this.debug_) {
         cast.player.api.setLoggerLevel(cast.player.api.LoggerLevel.DEBUG);
         cast.receiver.logger.setLevelValue(cast.receiver.LoggerLevel.DEBUG);
+    } else {
+        cast.player.api.setLoggerLevel(cast.player.api.LoggerLevel.ERROR);
+        cast.receiver.logger.setLevelValue(cast.receiver.LoggerLevel.ERROR);
     }
 
     /**
@@ -794,6 +797,13 @@ sampleplayer.CastPlayer.prototype.loadAudio_ = function (info) {
  * @private
  */
 sampleplayer.CastPlayer.prototype.getTicket_= function (data) {
+    if(data.typeofItem == "Trailer") {
+        console.log('Diagnal -> Skip Ticket Call');
+        return Promise.resolve({
+            ticket: null,
+            license_server_url: null
+        });
+    }
     return fetch(data.baseURL + 'player/drm/ticket', {
         method: "POST",
         body: JSON.stringify({
@@ -823,6 +833,17 @@ sampleplayer.CastPlayer.prototype.loadVideo_ = function (info) {
     var self = this;
     var customData = info.message.media.customData;
     console.log('Diagnal Input Data', info);
+
+    // var currentQueue = this.mediaManager_.getMediaQueue().getItems();
+    // currentQueue.forEach(function (qItem, index) {
+        // if(qItem.itemId == 1)
+        //     return true;
+        // console.log('Delete queue item', qItem);
+        // delete currentQueue[index];
+    // });
+
+    console.log('Diagnal Queue -> ', this.mediaManager_.getMediaQueue().getItems());
+
     this.getTicket_(customData).then(function (ticketData) {
 
         if('status' in ticketData) {
@@ -1013,6 +1034,8 @@ sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
 
                     var items = [queueItem];
                     self.mediaManager_.insertQueueItems(items);
+
+                    console.log('Diagnal Queue -> ', self.mediaManager_.getMediaQueue().getItems());
                 });
             });
         }).catch(function (err) {
@@ -1615,6 +1638,8 @@ sampleplayer.CastPlayer.prototype.onEnded_ = function () {
 sampleplayer.CastPlayer.prototype.sendProgress_ = function () {
     var self = this;
     var media = this.mediaManager_.getMediaInformation();
+    if(!media)
+        return;
     fetch(media.customData.baseURL + 'player/progress', {
             method: 'PUT',
             body: JSON.stringify({
@@ -1662,18 +1687,18 @@ sampleplayer.CastPlayer.prototype.onProgress_ = function () {
     var self = this;
     var duration = this.mediaElement_.duration;
     var currentTime = this.mediaElement_.currentTime;
-    if((duration - currentTime) < 120) {
+    if((duration - currentTime) < 30) {
         if(self.notificationComing_.style.display == 'block')
             return;
-        console.log('Diagnal Show coming next');
-        self.notificationComing_.style.display = 'block';
-        var media = this.mediaManager_.getMediaInformation();
         var currentQueue = this.mediaManager_.getMediaQueue().getItems();
+        if(currentQueue.length < 2)
+            return;
         var coming_next_item = currentQueue[1];
         // Set the values
         document.getElementById('episode_title').innerHTML = coming_next_item.media.metadata.title;
         document.getElementById('episode_number').innerHTML = coming_next_item.media.customData.episodeNumber;
         console.log('Diagnal -> current:', currentQueue);
+        self.notificationComing_.style.display = 'block';
     }
 };
 
