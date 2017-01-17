@@ -789,6 +789,11 @@ sampleplayer.CastPlayer.prototype.loadAudio_ = function (info) {
  * @private
  */
 sampleplayer.CastPlayer.prototype.getTicket_= function (data) {
+    if(data.isTrailer) {
+        return Promise.resolve({
+            ticket: null
+        })
+    }
     return fetch(data.baseURL + 'player/drm/ticket', {
         method: "POST",
         body: JSON.stringify({
@@ -887,7 +892,8 @@ sampleplayer.CastPlayer.prototype.loadVideo_ = function (info) {
             }
         }
         self.loadMediaManagerInfo_(info, !!protocolFunc);
-        self.queueNextEpisode_(info.message);
+        if(customData.isSeries)
+            self.queueNextEpisode_(info.message);
         return wasPreloaded;
 
     }).catch(function (err) {
@@ -942,6 +948,7 @@ sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
                     return;
                 }
 
+
                 self.checkMediaAccess_(next.media_id).then(function (res) {
                     console.log('Media Access', res);
                     if (res.status != "ok") {
@@ -949,79 +956,101 @@ sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
                         return;
                     }
 
-                    var customData = {
-                        mediaId: next.media_id,
-                        baseURL: media.customData.baseURL,
-                        deviceID: media.customData.deviceID,
-                        sessionToken: media.customData.sessionToken,
-                        isSeries: true,
-                        currentTime: 0,
-                        imageList: media.customData.imageList,
-                        episodeDetail: 'S' + self.zeroPad_(next.series[0].season_number, 2) + ' E' + self.zeroPad_(next.series[0].episode_number, 2),
-                        href: next._links.media.href,
-                        typeofItem: "Episode"
-                    };
+                    fetch(media.customData.baseURL + 'media/videos/' + next.media_id).then(function (next_media) {
+                        return next_media.json()
+                    }).then(function (next_media) {
 
-                    var streams = next.streams.web, contentId = null;
-                    streams.forEach(function (stream) {
-                        if (!('drm' in stream))
-                            return true;
-                        if (stream.drm.type == 'playready-dash') {
-                            customData.streamID = stream.id;
-                            contentId = stream.src;
+                        console.log('Diagnal -> Next Media', next_media);
+
+                        var customData = {
+                            mediaId: next.media_id,
+                            baseURL: media.customData.baseURL,
+                            deviceID: media.customData.deviceID,
+                            sessionToken: media.customData.sessionToken,
+                            isSeries: true,
+                            currentTime: 0,
+                            imageList: media.customData.imageList,
+                            episodeDetail: 'S' + self.zeroPad_(next.series[0].season_number, 2) + ' E' + self.zeroPad_(next.series[0].episode_number, 2),
+                            href: next._links.media.href,
+                            typeofItem: "Episode"
+                        };
+
+                        var streams = next.streams.web, contentId = null;
+                        streams.forEach(function (stream) {
+                            if (!('drm' in stream))
+                                return true;
+                            if (stream.drm.type == 'playready-dash') {
+                                customData.streamID = stream.id;
+                                contentId = stream.src;
+                            }
+                        });
+
+                        var images = [];
+                        var imageList = media.customData.imageList;
+                        imageList.forEach(function (img) {
+                            for (var type in img) {
+                                var format = img[type];
+                                next.images.forEach(function (next_img) {
+                                    if (next_img.type == type) {
+                                        images.push({
+                                            url: next_img.format[format].source
+                                        });
+                                    }
+                                });
+                            }
+                        });
+
+                        var queueItem = new cast.receiver.media.QueueItem();
+                        queueItem.autoplay = true;
+                        queueItem.playbackDuration = next.details.length;
+                        queueItem.customData = customData;
+                        queueItem.media = {
+                            contentId: contentId,
+                            contentType: "application/dash+xml",
+                            duration: next.details.length,
+                            streamType: "BUFFERED",
+                            currentTime: 0,
+                            metadata: {
+                                images: images,
+                                metadataType: 1,
+                                title: customData.episodeDetail + ' ' + next.titles.default,
+                                subtitle: next.medium_descriptions.default || next.long_descriptions.default,
+                            },
+                            customData: customData
+                        };
+
+                        if('subtitles' in next_media) {
+                            queueItem.media.tracks = [];
+                            for(var lang in next_media.subtitles) {
+                                var track = next_media.subtitles[lang];
+                                queueItem.media.tracks.push({
+                                    language: lang,
+                                    subtype: "SUBTITLES",
+                                    trackContentId: track.src,
+                                    trackId: track.id,
+                                    type: "TEXT"
+                                });
+                            }
                         }
+
+                        var items = [queueItem];
+                        self.mediaManager_.insertQueueItems(items);
+
+                        // var mediaItem = new cast.receiver.media.MediaInformation();
+                        // mediaItem.contentId = contentId;
+                        // mediaItem.contentType = "application/dash+xml";
+                        // mediaItem.duration = next.details.length;
+                        // mediaItem.streamType = "BUFFERED";
+                        // mediaItem.currentTime = 0;
+                        // mediaItem.metadata = {
+                        //     images: images,
+                        //     metadataType: 1,
+                        //     title: next.titles.default,
+                        //     subtitle: next.medium_descriptions.default || next.long_descriptions.default,
+                        // };
+                        // mediaItem.customData = customData;
+                        // self.preload(mediaItem);
                     });
-
-                    var images = [];
-                    var imageList = media.customData.imageList;
-                    imageList.forEach(function (img) {
-                        for (var type in img) {
-                            var format = img[type];
-                            next.images.forEach(function (next_img) {
-                                if (next_img.type == type) {
-                                    images.push({
-                                        url: next_img.format[format].source
-                                    });
-                                }
-                            });
-                        }
-                    });
-
-                    var queueItem = new cast.receiver.media.QueueItem();
-                    queueItem.autoplay = true;
-                    queueItem.playbackDuration = next.details.length;
-                    queueItem.customData = customData;
-                    queueItem.media = {
-                        contentId: contentId,
-                        contentType: "application/dash+xml",
-                        duration: next.details.length,
-                        streamType: "BUFFERED",
-                        currentTime: 0,
-                        metadata: {
-                            images: images,
-                            metadataType: 1,
-                            title: next.titles.default,
-                            subtitle: next.medium_descriptions.default || next.long_descriptions.default,
-                        },
-                        customData: customData
-                    };
-                    var items = [queueItem];
-                    self.mediaManager_.insertQueueItems(items);
-
-                    // var mediaItem = new cast.receiver.media.MediaInformation();
-                    // mediaItem.contentId = contentId;
-                    // mediaItem.contentType = "application/dash+xml";
-                    // mediaItem.duration = next.details.length;
-                    // mediaItem.streamType = "BUFFERED";
-                    // mediaItem.currentTime = 0;
-                    // mediaItem.metadata = {
-                    //     images: images,
-                    //     metadataType: 1,
-                    //     title: next.titles.default,
-                    //     subtitle: next.medium_descriptions.default || next.long_descriptions.default,
-                    // };
-                    // mediaItem.customData = customData;
-                    // self.preload(mediaItem);
 
                 });
             });
