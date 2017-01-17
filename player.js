@@ -887,6 +887,16 @@ sampleplayer.CastPlayer.prototype.loadVideo_ = function (info) {
         }
         self.loadMediaManagerInfo_(info, !!protocolFunc);
         self.queueNextEpisode_(info.message);
+
+        var tracks = info.message.media.tracks;
+        tracks.forEach(function (track) {
+            console.log('Diagnal -> Add Captions track', track);
+            var trackEl = document.createElement('track');
+            trackEl.src = track.trackContentId;
+            trackEl.kind ="captions";
+            self.mediaElement_.appendChild(trackEl);
+        });
+
         return wasPreloaded;
 
     }).catch(function (err) {
@@ -1787,6 +1797,51 @@ sampleplayer.CastPlayer.prototype.onLoad_ = function (event) {
         event.senderId));
 };
 
+/**
+ * Change Audio Track
+ */
+sampleplayer.CastPlayer.prototype.changeAudioTrack = function() {
+    var currentLanguage = null;
+    var protocol = this.player_.getStreamingProtocol();
+    var streamCount = protocol.getStreamCount();
+    var streamInfo;
+
+    for (var i = 0; i < streamCount; i++) {
+        if (protocol.isStreamEnabled(i)) {
+            streamInfo = protocol.getStreamInfo(i);
+            if (streamInfo.mimeType.indexOf('audio') === 0) {
+                if (streamInfo.language) {
+                    currentLanguage = i;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (currentLanguage === null) {
+        currentLanguage = 0;
+    }
+
+    i = currentLanguage + 1;
+    while (i !== currentLanguage) {
+        if (i === streamCount) {
+            i = 0;
+        }
+
+        streamInfo = protocol.getStreamInfo(i);
+        if (streamInfo.mimeType.indexOf('audio') === 0) {
+            protocol.enableStream(i, true);
+            protocol.enableStream(currentLanguage, false);
+            break;
+        }
+
+        i++;
+    }
+
+    if (i !== currentLanguage) {
+        this.player_.reload();
+    }
+};
 
 /**
  * Called when we receive a EDIT_TRACKS_INFO message.
@@ -1797,27 +1852,39 @@ sampleplayer.CastPlayer.prototype.onLoad_ = function (event) {
 sampleplayer.CastPlayer.prototype.onEditTracksInfo_ = function (event) {
     this.log_('onEditTracksInfo');
     this.onEditTracksInfoOrig_(event);
+    console.log('Diagnal Change Track -> ', event.data);
+    if (event.data.activeTrackIds.length == 1) {
+        var protocol = this.player_.getStreamingProtocol();
+        var streamCount = protocol.getStreamCount();
+        for (var i = 0; i < streamCount; i++) {
+            var streamInfo = protocol.getStreamInfo(i);
+            console.log('Diagnal Stream', streamInfo);
+        }
+        this.player_.enableCaptions(true);
+    } else {
+        this.changeAudioTrack(event.data.activeTrackIds[1]);
+    }
 
     // If the captions are embedded or ttml we need to enable/disable tracks
     // as needed (vtt is processed by the media manager)
-    if (!event.data || !event.data.activeTrackIds || !this.textTrackType_) {
-        return;
-    }
-    var mediaInformation = this.mediaManager_.getMediaInformation() || {};
-    var type = this.textTrackType_;
-    if (type == sampleplayer.TextTrackType.SIDE_LOADED_TTML) {
-        // The player_ may not have been created yet if the type of media did
-        // not require MPL. It will be lazily created in processTtmlCues_
-        if (this.player_) {
-            this.player_.enableCaptions(false, cast.player.api.CaptionsType.TTML);
-        }
-        this.processTtmlCues_(event.data.activeTrackIds,
-            mediaInformation.tracks || []);
-    } else if (type == sampleplayer.TextTrackType.EMBEDDED) {
-        this.player_.enableCaptions(false);
-        this.processInBandTracks_(event.data.activeTrackIds);
-        this.player_.enableCaptions(true);
-    }
+    // if (!event.data || !event.data.activeTrackIds || !this.textTrackType_) {
+    //     return;
+    // }
+    // var mediaInformation = this.mediaManager_.getMediaInformation() || {};
+    // var type = this.textTrackType_;
+    // if (type == sampleplayer.TextTrackType.SIDE_LOADED_TTML) {
+    //     // The player_ may not have been created yet if the type of media did
+    //     // not require MPL. It will be lazily created in processTtmlCues_
+    //     if (this.player_) {
+    //         this.player_.enableCaptions(false, cast.player.api.CaptionsType.TTML);
+    //     }
+    //     this.processTtmlCues_(event.data.activeTrackIds,
+    //         mediaInformation.tracks || []);
+    // } else if (type == sampleplayer.TextTrackType.EMBEDDED) {
+    //     this.player_.enableCaptions(false);
+    //     this.processInBandTracks_(event.data.activeTrackIds);
+    //     this.player_.enableCaptions(true);
+    // }
 };
 
 
