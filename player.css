@@ -147,9 +147,6 @@ body {
 }
 
 .player .media-info .media-subtitle {
-    display: -webkit-box;
-    -webkit-line-clamp: 3 !important;
-    -webkit-box-orient: vertical;
     color: rgba(203, 203, 203, 0.8);
     font-size: 22px;
     overflow: hidden;
@@ -283,9 +280,6 @@ body {
 }
 
 .player .preview-mode-info .preview-mode-text {
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
     width: 100%;
     align-self: flex-end;
 }

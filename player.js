@@ -948,7 +948,6 @@ sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
                     return;
                 }
 
-
                 self.checkMediaAccess_(next.media_id).then(function (res) {
                     console.log('Media Access', res);
                     if (res.status != "ok") {
@@ -970,7 +969,7 @@ sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
                             isSeries: true,
                             currentTime: 0,
                             imageList: media.customData.imageList,
-                            episodeDetail: 'S' + self.zeroPad_(next.series[0].season_number, 2) + ' E' + self.zeroPad_(next.series[0].episode_number, 2),
+                            episodeDetail: next.titles.default,
                             href: next._links.media.href,
                             typeofItem: "Episode"
                         };
@@ -1013,7 +1012,7 @@ sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
                             metadata: {
                                 images: images,
                                 metadataType: 1,
-                                title: customData.episodeDetail + ' ' + next.titles.default,
+                                title: next_media.series[0].titles.default,
                                 subtitle: next.medium_descriptions.default || next.long_descriptions.default,
                             },
                             customData: customData
@@ -1859,7 +1858,7 @@ sampleplayer.CastPlayer.prototype.changeAudioTrack = function() {
     }
 
     if (i !== currentLanguage) {
-        this.setState_(sampleplayer.State.BUFFERING, true);
+        this.setState_(sampleplayer.State.BUFFERING, false);
         this.player_.reload();
     }
 };
