@@ -322,6 +322,12 @@ sampleplayer.CastPlayer = function (element) {
 
     this.mediaManager_.onPreload = this.onPreload_.bind(this);
     this.mediaManager_.onCancelPreload = this.onCancelPreload_.bind(this);
+
+    /**
+     * Namespace string for sender custom messages
+     * @type {string}
+     */
+    this.msgNamespace = "urn:x-cast:my.dimsum.dimsum";
 };
 
 
@@ -497,9 +503,22 @@ sampleplayer.CastPlayer.prototype.getPlayer = function () {
  * @export
  */
 sampleplayer.CastPlayer.prototype.start = function () {
+    this.initMessageBus();
     this.receiverManager_.start();
 };
 
+sampleplayer.CastPlayer.prototype.initMessageBus = function () {
+    var self = this;
+    this.messageBus = this.receiverManager_.getCastMessageBus(
+        this.msgNamespace,
+        cast.receiver.CastMessageBus.MessageType.JSON
+    );
+    this.messageBus.onMessage = function(event) {
+        var sender = event.senderId;
+        var message = event.data;
+        console.log('Diagnal Receive Msg', sender, message);
+    };
+};
 
 /**
  * Preloads the given data.
@@ -1574,6 +1593,28 @@ sampleplayer.CastPlayer.prototype.onPlaying_ = function () {
     var isLoading = this.state_ == sampleplayer.State.LOADING;
     var crossfade = isLoading && !isAudio;
     this.setState_(sampleplayer.State.PLAYING, crossfade);
+
+    // BroadCast stream details to senders
+    var protocol = this.player_.getStreamingProtocol();
+    var streamCount = protocol.getStreamCount();
+    var streamInfo, videoStreamIndex = null, streams = [];
+    for (var i = 0; i < streamCount; i++) {
+        streamInfo = protocol.getStreamInfo(i);
+        streamInfo.isActive = protocol.isStreamEnabled(i);
+        streams.push(streamInfo);
+
+        // Get video stream index
+        if (streamInfo.mimeType.indexOf('video') === 0) {
+            videoStreamIndex = i;
+        }
+    }
+    this.messageBus.broadcast({
+        data: {
+            "streams": streams,
+            "tracks": this.mediaManager_.getMediaInformation().tracks,
+            "quality": protocol.getQualityLevel(videoStreamIndex)
+        }
+    });
 };
 
 
@@ -2418,21 +2459,4 @@ sampleplayer.isCastForAudioDevice_ = function () {
         }
     }
     return false;
-};
-
-/**
- * Namespace string for sender custom messages
- * @type {string}
- */
-var msgNamespace = "urn:x-cast:my.dimsum.dimsum";
-
-var receiverManager = window.cast.receiver.CastReceiverManager.getInstance();
-var messageBus = receiverManager.getCastMessageBus(
-    msgNamespace,
-    cast.receiver.CastMessageBus.MessageType.JSON
-);
-messageBus.onMessage = function(event) {
-    var sender = event.senderId;
-    var message = event.data;
-    console.log('Diagnal Receive Msg', sender, message);
 };
