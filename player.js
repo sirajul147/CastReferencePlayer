@@ -841,6 +841,11 @@ sampleplayer.CastPlayer.prototype.loadVideo_ = function (info) {
     this.log_('loadVideo_');
     var self = this;
     var customData = info.message.media.customData;
+
+    if('selectedAudio' in customData){
+        self.selectedAudioLanguage = customData.selectedAudio;
+    }
+
     console.log('Diagnal Input Data', info);
     this.getTicket_(customData).then(function (ticketData) {
 
@@ -911,7 +916,7 @@ sampleplayer.CastPlayer.prototype.loadVideo_ = function (info) {
             }
         }
         self.loadMediaManagerInfo_(info, !!protocolFunc);
-        if(customData.isSeries)
+        if(customData.isSeries && !customData.isTrailer)
             self.queueNextEpisode_(info.message);
         return wasPreloaded;
 
@@ -1040,11 +1045,11 @@ sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
                         if('subtitles' in next_media) {
                             queueItem.media.tracks = [];
                             for(var lang in next_media.subtitles) {
-                                var track = next_media.subtitles[lang];
+                                var track = next_media.subtitles[lang][0];
                                 queueItem.media.tracks.push({
                                     language: lang,
                                     subtype: "SUBTITLES",
-                                    trackContentId: track.src,
+                                    trackContentId: track.src.replace('.srt', '.vtt'),
                                     trackId: track.id,
                                     type: "TEXT"
                                 });
@@ -1607,6 +1612,13 @@ sampleplayer.CastPlayer.prototype.onPlaying_ = function () {
         if (streamInfo.mimeType.indexOf('video') === 0) {
             videoStreamIndex = i;
         }
+        if (streamInfo.mimeType.indexOf('audio') === 0) {
+            videoStreamIndex = i;
+            if(protocol.isStreamEnabled(i)) {
+                if(streamInfo.language != this.selectedAudioLanguage)
+                    this.changeAudioTrack(null, this.selectedAudioLanguage);
+            }
+        }
     }
     this.messageBus.broadcast({
         data: {
@@ -1872,15 +1884,63 @@ sampleplayer.CastPlayer.prototype.onLoad_ = function (event) {
  * @type {boolean}
  */
 this.switchingAudioTrack = false;
+this.selectedAudioLanguage = null;
 
 /**
- * Change Audio Track
+ * Change Audio Track by ID
  */
-sampleplayer.CastPlayer.prototype.changeAudioTrack = function(trackId) {
+sampleplayer.CastPlayer.prototype.changeAudioTrack = function(trackId, lang) {
     var currentLanguage = null;
     var protocol = this.player_.getStreamingProtocol();
     var streamCount = protocol.getStreamCount();
     var streamInfo;
+    var self = this;
+
+    if(trackId == null) {
+        if(lang) {
+            console.log('Diagnal Select Audio', lang);
+            // Save audio preference
+            this.selectedAudioLanguage = lang;
+
+            for (var i = 0; i < streamCount; i++) {
+                if (protocol.isStreamEnabled(i)) {
+                    streamInfo = protocol.getStreamInfo(i);
+                    if (streamInfo.mimeType.indexOf('audio') === 0) {
+                        if (streamInfo.language) {
+                            currentLanguage = i;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            for (var i = 0; i < streamCount; i++) {
+                streamInfo = protocol.getStreamInfo(i);
+                if (streamInfo.mimeType.indexOf('audio') === 0) {
+                    if (streamInfo.language == lang) {
+                        protocol.enableStream(i, true);
+                        protocol.enableStream(currentLanguage, false);
+                        this.setState_(sampleplayer.State.BUFFERING, false);
+                        self.switchingAudioTrack = true;
+                        this.player_.reload();
+                        break;
+                    }
+                }
+            }
+        }
+        return;
+    }
+
+    console.log('Diagnal Select Audio', trackId);
+
+    // Save audio preference
+    for (var i = 0; i < streamCount; i++) {
+        if (i == (trackId - 1)) {
+            streamInfo = protocol.getStreamInfo(i);
+            this.selectedAudioLanguage = streamInfo.language;
+            console.log('Diagnal -> Selected Audio Track', this.selectedAudioLanguage);
+        }
+    }
 
     for (var i = 0; i < streamCount; i++) {
         if (protocol.isStreamEnabled(i)) {
@@ -1894,11 +1954,9 @@ sampleplayer.CastPlayer.prototype.changeAudioTrack = function(trackId) {
         }
     }
 
-    // i = currentLanguage + 1;
     trackId = trackId - 1;
     console.log('Diagnal Switch Language from -> ', i, ' to ', trackId);
 
-    var self = this;
     if (i !== trackId) {
         protocol.enableStream(trackId, true);
         protocol.enableStream(i, false);
