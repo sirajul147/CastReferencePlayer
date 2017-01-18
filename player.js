@@ -1434,6 +1434,15 @@ sampleplayer.CastPlayer.prototype.setType_ = function (type, isLiveStream) {
  * @private
  */
 sampleplayer.CastPlayer.prototype.setState_ = function (state, opt_crossfade, opt_delay) {
+
+    // handle idle screen while switching audio
+    if(this.switchingAudioTrack && state == 'idle') {
+        console.log('Diagnal -> Skip Idle since we are switching audio tracks');
+        return;
+    } else if(this.switchingAudioTrack) {
+        this.switchingAudioTrack = false;
+    }
+
     this.log_('setState_: state=' + state + ', crossfade=' + opt_crossfade +
         ', delay=' + opt_delay);
     var self = this;
@@ -1816,10 +1825,17 @@ sampleplayer.CastPlayer.prototype.onLoad_ = function (event) {
         event.senderId));
 };
 
+
+/**
+ * Check switching track state
+ * @type {boolean}
+ */
+this.switchingAudioTrack = false;
+
 /**
  * Change Audio Track
  */
-sampleplayer.CastPlayer.prototype.changeAudioTrack = function() {
+sampleplayer.CastPlayer.prototype.changeAudioTrack = function(trackId) {
     var currentLanguage = null;
     var protocol = this.player_.getStreamingProtocol();
     var streamCount = protocol.getStreamCount();
@@ -1837,28 +1853,16 @@ sampleplayer.CastPlayer.prototype.changeAudioTrack = function() {
         }
     }
 
-    if (currentLanguage === null) {
-        currentLanguage = 0;
-    }
+    // i = currentLanguage + 1;
+    trackId = trackId - 1;
+    console.log('Diagnal Switch Language from -> ', i, ' to ', trackId);
 
-    i = currentLanguage + 1;
-    while (i !== currentLanguage) {
-        if (i === streamCount) {
-            i = 0;
-        }
-
-        streamInfo = protocol.getStreamInfo(i);
-        if (streamInfo.mimeType.indexOf('audio') === 0) {
-            protocol.enableStream(i, true);
-            protocol.enableStream(currentLanguage, false);
-            break;
-        }
-
-        i++;
-    }
-
-    if (i !== currentLanguage) {
+    var self = this;
+    if (i !== trackId) {
+        protocol.enableStream(trackId, true);
+        protocol.enableStream(i, false);
         this.setState_(sampleplayer.State.BUFFERING, false);
+        self.switchingAudioTrack = true;
         this.player_.reload();
     }
 };
@@ -1874,32 +1878,36 @@ sampleplayer.CastPlayer.prototype.onEditTracksInfo_ = function (event) {
     console.log('Diagnal Change Track -> ', event.data);
     this.onEditTracksInfoOrig_(event);
 
-    if (event.data.activeTrackIds.length == 1) {
-        this.player_.enableCaptions(true);
-    } else {
-        this.changeAudioTrack(event.data.activeTrackIds[1]);
+    if (event.data.hasOwnProperty('activeTrackIds')) {
+        if (event.data.activeTrackIds.length == 1) {
+            // this.player_.enableCaptions(true);
+
+            // If the captions are embedded or ttml we need to enable/disable tracks
+            // as needed (vtt is processed by the media manager)
+            if (!event.data || !event.data.activeTrackIds || !this.textTrackType_) {
+                return;
+            }
+            var mediaInformation = this.mediaManager_.getMediaInformation() || {};
+            var type = this.textTrackType_;
+            if (type == sampleplayer.TextTrackType.SIDE_LOADED_TTML) {
+                // The player_ may not have been created yet if the type of media did
+                // not require MPL. It will be lazily created in processTtmlCues_
+                if (this.player_) {
+                    this.player_.enableCaptions(false, cast.player.api.CaptionsType.TTML);
+                }
+                this.processTtmlCues_(event.data.activeTrackIds,
+                    mediaInformation.tracks || []);
+            } else if (type == sampleplayer.TextTrackType.EMBEDDED) {
+                this.player_.enableCaptions(false);
+                this.processInBandTracks_(event.data.activeTrackIds);
+                this.player_.enableCaptions(true);
+            }
+
+        } else {
+            this.changeAudioTrack(event.data.activeTrackIds[1]);
+        }
     }
 
-    // If the captions are embedded or ttml we need to enable/disable tracks
-    // as needed (vtt is processed by the media manager)
-    // if (!event.data || !event.data.activeTrackIds || !this.textTrackType_) {
-    //     return;
-    // }
-    // var mediaInformation = this.mediaManager_.getMediaInformation() || {};
-    // var type = this.textTrackType_;
-    // if (type == sampleplayer.TextTrackType.SIDE_LOADED_TTML) {
-    //     // The player_ may not have been created yet if the type of media did
-    //     // not require MPL. It will be lazily created in processTtmlCues_
-    //     if (this.player_) {
-    //         this.player_.enableCaptions(false, cast.player.api.CaptionsType.TTML);
-    //     }
-    //     this.processTtmlCues_(event.data.activeTrackIds,
-    //         mediaInformation.tracks || []);
-    // } else if (type == sampleplayer.TextTrackType.EMBEDDED) {
-    //     this.player_.enableCaptions(false);
-    //     this.processInBandTracks_(event.data.activeTrackIds);
-    //     this.player_.enableCaptions(true);
-    // }
 };
 
 
@@ -2410,4 +2418,21 @@ sampleplayer.isCastForAudioDevice_ = function () {
         }
     }
     return false;
+};
+
+/**
+ * Namespace string for sender custom messages
+ * @type {string}
+ */
+var msgNamespace = "urn:x-cast:my.dimsum.dimsum";
+
+var receiverManager = window.cast.receiver.CastReceiverManager.getInstance();
+var messageBus = receiverManager.getCastMessageBus(
+    msgNamespace,
+    cast.receiver.CastMessageBus.MessageType.JSON
+);
+messageBus.onMessage = function(event) {
+    var sender = event.senderId;
+    var message = event.data;
+    console.log('Diagnal Receive Msg', sender, message);
 };
