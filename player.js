@@ -330,6 +330,7 @@ sampleplayer.CastPlayer = function (element) {
     this.MSG_CODE = {};
     this.MSG_CODE.REQUEST_GET_ALL_TRACKS = 1;
     this.MSG_CODE.REQUEST_SET_ACTIVE_TRACKS = 2;
+    this.MSG_CODE.REQUEST_EMPTY = 3;
 };
 
 
@@ -532,24 +533,7 @@ sampleplayer.CastPlayer.prototype.initMessageBus = function () {
                 if('selectedSubtitleLang' in message) {
                     if(message.selectedSubtitleLang) {
                         var lang = message.selectedSubtitleLang;
-                        self.selectedSubtitleLang = lang;
-                        var mediaInformation = self.mediaManager_.getMediaInformation() || {};
-                        var tracks = mediaInformation.tracks;
-                        tracks.forEach(function (track) {
-                            if(track.language == lang) {
-
-                                // Delete all previos tracks
-                                var trx = document.getElementsByTagName('track');
-                                for(var key in trx) {
-                                    var t = trx[key];
-                                    if(t.kind == 'captions')
-                                        t.remove();
-                                }
-
-                                console.log('Diagnal -> Enabled', track);
-                                self.player_.enableCaptions(true, cast.player.api.CaptionsType.WEBVTT, track.trackContentId);
-                            }
-                        });
+                        self.changeSubtitleTrack(lang);
                     }
                 }
                 break;
@@ -1640,6 +1624,24 @@ sampleplayer.CastPlayer.prototype.onPlaying_ = function () {
     var crossfade = isLoading && !isAudio;
     this.setState_(sampleplayer.State.PLAYING, crossfade);
     this.broadCastStreamInfo();
+
+    var self = this;
+    var protocol = this.player_.getStreamingProtocol();
+    var streamCount = protocol.getStreamCount();
+    var streamInfo;
+    for (var i = 0; i < streamCount; i++) {
+        streamInfo = protocol.getStreamInfo(i);
+        if (streamInfo.mimeType.indexOf('audio') === 0) {
+            if(protocol.isStreamEnabled(i)) {
+                if(streamInfo.language != this.selectedAudioLanguage)
+                    self.changeAudioTrack(null, this.selectedAudioLanguage);
+            }
+        }
+    }
+
+    if(self.selectedSubtitleLang)
+        self.changeSubtitleTrack(self.selectedSubtitleLang);
+
 };
 
 /**
@@ -1647,33 +1649,22 @@ sampleplayer.CastPlayer.prototype.onPlaying_ = function () {
  */
 sampleplayer.CastPlayer.prototype.broadCastStreamInfo =
     function () {
-        if(!this.player_)
-            return;
-
         // BroadCast stream details to senders
         var self = this;
-        var protocol = this.player_.getStreamingProtocol();
-        var streamCount = protocol.getStreamCount();
-        var streamInfo, videoStreamIndex = null, streams = [];
-        for (var i = 0; i < streamCount; i++) {
-            streamInfo = protocol.getStreamInfo(i);
-            streamInfo.isActive = protocol.isStreamEnabled(i);
-            streams.push(streamInfo);
 
-            // Get video stream index
-            if (streamInfo.mimeType.indexOf('video') === 0) {
-                videoStreamIndex = i;
-            }
-            if (streamInfo.mimeType.indexOf('audio') === 0) {
-                videoStreamIndex = i;
-                if(protocol.isStreamEnabled(i)) {
-                    if(streamInfo.language != this.selectedAudioLanguage)
-                        this.changeAudioTrack(null, this.selectedAudioLanguage);
+        if(!self.player_) {
+            this.messageBus.broadcast({
+                data: {
+                    "requestCode": this.MSG_CODE.REQUEST_EMPTY,
                 }
-            }
+            });
+            return;
         }
 
-        var tracks = this.mediaManager_.getMediaInformation().tracks;
+        var tracks = this.mediaManager_.getMediaInformation() ? this.mediaManager_.getMediaInformation().tracks : [];
+        tracks = tracks.filter(function (track) {
+            return (track.type == "TEXT");
+        });
         tracks.forEach(function (track) {
             track.isActive = false;
             if(track.language == self.selectedSubtitleLang) {
@@ -1681,6 +1672,14 @@ sampleplayer.CastPlayer.prototype.broadCastStreamInfo =
             }
         });
 
+        var protocol = this.player_.getStreamingProtocol();
+        var streamCount = protocol.getStreamCount();
+        var streamInfo, streams = [];
+        for (var i = 0; i < streamCount; i++) {
+            streamInfo = protocol.getStreamInfo(i);
+            streamInfo.isActive = protocol.isStreamEnabled(i);
+            streams.push(streamInfo);
+        }
         console.log('Broadcast Data', {
             "requestCode": this.MSG_CODE.REQUEST_GET_ALL_TRACKS,
             "streams": streams,
@@ -2038,6 +2037,32 @@ sampleplayer.CastPlayer.prototype.changeAudioTrack = function(trackId, lang) {
         this.player_.reload();
     }
 };
+
+/**
+ * Change subtitle track
+ */
+sampleplayer.CastPlayer.prototype.changeSubtitleTrack =
+    function (lang) {
+        var self = this;
+        self.selectedSubtitleLang = lang;
+        var mediaInformation = self.mediaManager_.getMediaInformation() || {};
+        var tracks = mediaInformation.tracks;
+
+        // Delete all previos tracks
+        var trx = document.getElementsByTagName('track');
+        for (var key in trx) {
+            var t = trx[key];
+            if (t.kind == 'captions')
+                t.remove();
+        }
+
+        tracks.forEach(function (track) {
+            if (track.language == lang) {
+                console.log('Diagnal -> Enabled', track);
+                self.player_.enableCaptions(true, cast.player.api.CaptionsType.WEBVTT, track.trackContentId);
+            }
+        });
+    };
 
 /**
  * Called when we receive a EDIT_TRACKS_INFO message.
