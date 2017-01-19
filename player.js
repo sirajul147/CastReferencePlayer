@@ -52,7 +52,6 @@
  */
 var sampleplayer = sampleplayer || {};
 
-
 /**
  * <p>
  * Cast player constructor - This does the following:
@@ -328,6 +327,9 @@ sampleplayer.CastPlayer = function (element) {
      * @type {string}
      */
     this.msgNamespace = "urn:x-cast:my.dimsum.dimsum";
+    this.MSG_CODE = {};
+    this.MSG_CODE.REQUEST_GET_ALL_TRACKS = 1;
+    this.MSG_CODE.REQUEST_SET_ACTIVE_TRACKS = 2;
 };
 
 
@@ -517,6 +519,45 @@ sampleplayer.CastPlayer.prototype.initMessageBus = function () {
         var sender = event.senderId;
         var message = event.data;
         console.log('Diagnal Receive Msg', sender, message);
+
+        switch (message.requestCode) {
+
+            case self.MSG_CODE.REQUEST_SET_ACTIVE_TRACKS: {
+                console.log('Diagnal Msg', message);
+                if('selectedAudioLang' in message) {
+                    if(message.selectedAudioLang) {
+                        self.changeAudioTrack(null, message.selectedAudioLang);
+                    }
+                }
+                if('selectedSubtitleLang' in message) {
+                    if(message.selectedSubtitleLang) {
+                        var lang = message.selectedSubtitleLang;
+                        self.selectedSubtitleLang = lang;
+                        var mediaInformation = self.mediaManager_.getMediaInformation() || {};
+                        var tracks = mediaInformation.tracks;
+                        tracks.forEach(function (track) {
+                            if(track.language == lang) {
+
+                                // Delete all previos tracks
+                                var trx = document.getElementsByTagName('track');
+                                for(var key in trx) {
+                                    var t = trx[key];
+                                    if(t.kind == 'captions')
+                                        t.remove();
+                                }
+
+                                console.log('Diagnal -> Enabled', track);
+                                self.player_.enableCaptions(true, cast.player.api.CaptionsType.WEBVTT, track.trackContentId);
+                            }
+                        });
+                    }
+                }
+                break;
+            }
+
+        }
+
+        self.broadCastStreamInfo();
     };
 };
 
@@ -1598,36 +1639,63 @@ sampleplayer.CastPlayer.prototype.onPlaying_ = function () {
     var isLoading = this.state_ == sampleplayer.State.LOADING;
     var crossfade = isLoading && !isAudio;
     this.setState_(sampleplayer.State.PLAYING, crossfade);
+    this.broadCastStreamInfo();
+};
 
-    // BroadCast stream details to senders
-    var protocol = this.player_.getStreamingProtocol();
-    var streamCount = protocol.getStreamCount();
-    var streamInfo, videoStreamIndex = null, streams = [];
-    for (var i = 0; i < streamCount; i++) {
-        streamInfo = protocol.getStreamInfo(i);
-        streamInfo.isActive = protocol.isStreamEnabled(i);
-        streams.push(streamInfo);
+/**
+ * Broadast current stream info to all senders
+ */
+sampleplayer.CastPlayer.prototype.broadCastStreamInfo =
+    function () {
+        if(!this.player_)
+            return;
 
-        // Get video stream index
-        if (streamInfo.mimeType.indexOf('video') === 0) {
-            videoStreamIndex = i;
-        }
-        if (streamInfo.mimeType.indexOf('audio') === 0) {
-            videoStreamIndex = i;
-            if(protocol.isStreamEnabled(i)) {
-                if(streamInfo.language != this.selectedAudioLanguage)
-                    this.changeAudioTrack(null, this.selectedAudioLanguage);
+        // BroadCast stream details to senders
+        var self = this;
+        var protocol = this.player_.getStreamingProtocol();
+        var streamCount = protocol.getStreamCount();
+        var streamInfo, videoStreamIndex = null, streams = [];
+        for (var i = 0; i < streamCount; i++) {
+            streamInfo = protocol.getStreamInfo(i);
+            streamInfo.isActive = protocol.isStreamEnabled(i);
+            streams.push(streamInfo);
+
+            // Get video stream index
+            if (streamInfo.mimeType.indexOf('video') === 0) {
+                videoStreamIndex = i;
+            }
+            if (streamInfo.mimeType.indexOf('audio') === 0) {
+                videoStreamIndex = i;
+                if(protocol.isStreamEnabled(i)) {
+                    if(streamInfo.language != this.selectedAudioLanguage)
+                        this.changeAudioTrack(null, this.selectedAudioLanguage);
+                }
             }
         }
-    }
-    this.messageBus.broadcast({
-        data: {
+
+        var tracks = this.mediaManager_.getMediaInformation().tracks;
+        tracks.forEach(function (track) {
+            track.isActive = false;
+            if(track.language == self.selectedSubtitleLang) {
+                track.isActive = true;
+            }
+        });
+
+        console.log('Broadcast Data', {
+            "requestCode": this.MSG_CODE.REQUEST_GET_ALL_TRACKS,
             "streams": streams,
-            "tracks": this.mediaManager_.getMediaInformation().tracks,
-            "quality": protocol.getQualityLevel(videoStreamIndex)
-        }
-    });
-};
+            "tracks": tracks,
+            "quality": 0
+        });
+        this.messageBus.broadcast({
+            data: {
+                "requestCode": this.MSG_CODE.REQUEST_GET_ALL_TRACKS,
+                "streams": streams,
+                "tracks": tracks,
+                "quality": 0
+            }
+        });
+    };
 
 
 /**
@@ -1652,6 +1720,7 @@ sampleplayer.CastPlayer.prototype.onPause_ = function () {
     }
     this.updateProgress_();
     this.sendProgress_();
+    this.broadCastStreamInfo();
 };
 
 
@@ -1810,6 +1879,7 @@ sampleplayer.CastPlayer.prototype.onSeekEnd_ = function () {
     clearTimeout(this.seekingTimeoutId_);
     this.seekingTimeoutId_ = sampleplayer.addClassWithTimeout_(this.element_,
         'seeking', 3000);
+    this.broadCastStreamInfo();
 };
 
 
@@ -1885,6 +1955,7 @@ sampleplayer.CastPlayer.prototype.onLoad_ = function (event) {
  */
 this.switchingAudioTrack = false;
 this.selectedAudioLanguage = null;
+this.selectedSubtitleLang = null;
 
 /**
  * Change Audio Track by ID
@@ -1918,6 +1989,8 @@ sampleplayer.CastPlayer.prototype.changeAudioTrack = function(trackId, lang) {
                 streamInfo = protocol.getStreamInfo(i);
                 if (streamInfo.mimeType.indexOf('audio') === 0) {
                     if (streamInfo.language == lang) {
+                        if(currentLanguage == i)
+                            return;
                         protocol.enableStream(i, true);
                         protocol.enableStream(currentLanguage, false);
                         this.setState_(sampleplayer.State.BUFFERING, false);
@@ -1977,31 +2050,10 @@ sampleplayer.CastPlayer.prototype.onEditTracksInfo_ = function (event) {
     console.log('Diagnal Change Track -> ', event.data);
     this.onEditTracksInfoOrig_(event);
 
+    var self = this;
     if (event.data.hasOwnProperty('activeTrackIds')) {
         if (event.data.activeTrackIds.length == 1) {
-            // this.player_.enableCaptions(true);
-
-            // If the captions are embedded or ttml we need to enable/disable tracks
-            // as needed (vtt is processed by the media manager)
-            if (!event.data || !event.data.activeTrackIds || !this.textTrackType_) {
-                return;
-            }
-            var mediaInformation = this.mediaManager_.getMediaInformation() || {};
-            var type = this.textTrackType_;
-            if (type == sampleplayer.TextTrackType.SIDE_LOADED_TTML) {
-                // The player_ may not have been created yet if the type of media did
-                // not require MPL. It will be lazily created in processTtmlCues_
-                if (this.player_) {
-                    this.player_.enableCaptions(false, cast.player.api.CaptionsType.TTML);
-                }
-                this.processTtmlCues_(event.data.activeTrackIds,
-                    mediaInformation.tracks || []);
-            } else if (type == sampleplayer.TextTrackType.EMBEDDED) {
-                this.player_.enableCaptions(false);
-                this.processInBandTracks_(event.data.activeTrackIds);
-                this.player_.enableCaptions(true);
-            }
-
+            return;
         } else {
             this.changeAudioTrack(event.data.activeTrackIds[1]);
         }
