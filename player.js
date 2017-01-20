@@ -758,7 +758,11 @@ sampleplayer.CastPlayer.prototype.loadMetadata_ = function (media) {
     if (!sampleplayer.isCastForAudioDevice_()) {
         var metadata = media.metadata || {};
         var titleElement = this.element_.querySelector('.media-title');
-        sampleplayer.setInnerText_(titleElement, metadata.title);
+
+        var tv_title = media.customData.episodeDetail || metadata.title;
+        if(media.customData.isTrailer)
+            tv_title = metadata.title;
+        sampleplayer.setInnerText_(titleElement, tv_title);
 
         var subtitleElement = this.element_.querySelector('.media-subtitle');
         sampleplayer.setInnerText_(subtitleElement, metadata.subtitle);
@@ -1785,6 +1789,11 @@ sampleplayer.CastPlayer.prototype.onEnded_ = function () {
 sampleplayer.CastPlayer.prototype.sendProgress_ = function () {
     var self = this;
     var media = this.mediaManager_.getMediaInformation();
+
+    // Skip sending progress its we're playing a trailer
+    if(media.customData.isTrailer)
+        return;
+
     fetch(media.customData.baseURL + 'player/progress', {
             method: 'PUT',
             body: JSON.stringify({
