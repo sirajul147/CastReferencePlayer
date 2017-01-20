@@ -1017,6 +1017,10 @@ sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
                     queueItem.autoplay = true;
                     queueItem.playbackDuration = next.details.length;
                     queueItem.customData = customData;
+
+                    var duration = content.details.length;
+                    var preloadTime = 0.05 * duration;
+                    queueItem.preloadTime = preloadTime;
                     queueItem.media = {
                         contentId: contentId,
                         contentType: "application/dash+xml",
@@ -1027,7 +1031,7 @@ sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
                             images: images,
                             metadataType: 1,
                             title: next.titles.default,
-                            subtitle: next.medium_descriptions.default || next.long_descriptions.default,
+                            subtitle: next.medium_descriptions.default || next.long_descriptions.default
                         },
                         customData: customData
                     };
@@ -1684,22 +1688,22 @@ sampleplayer.CastPlayer.prototype.onProgress_ = function () {
     this.updateProgress_();
 
     // show coming next
-    var self = this;
-    var duration = this.mediaElement_.duration;
-    var currentTime = this.mediaElement_.currentTime;
-    if((duration - currentTime) < 30) {
-        if(self.notificationComing_.style.display == 'block')
-            return;
-        var currentQueue = this.mediaManager_.getMediaQueue().getItems();
-        if(currentQueue.length < 2)
-            return;
-        var coming_next_item = currentQueue[1];
-        // Set the values
-        document.getElementById('episode_title').innerHTML = coming_next_item.media.metadata.title;
-        document.getElementById('episode_number').innerHTML = coming_next_item.media.customData.episodeNumber;
-        console.log('Diagnal -> current:', currentQueue);
-        self.notificationComing_.style.display = 'block';
-    }
+    // var self = this;
+    // var duration = this.mediaElement_.duration;
+    // var currentTime = this.mediaElement_.currentTime;
+    // if((duration - currentTime) < 30) {
+    //     if(self.notificationComing_.style.display == 'block')
+    //         return;
+    //     var currentQueue = this.mediaManager_.getMediaQueue().getItems();
+    //     if(currentQueue.length < 2)
+    //         return;
+    //     var coming_next_item = currentQueue[1];
+    //     // Set the values
+    //     document.getElementById('episode_title').innerHTML = coming_next_item.media.metadata.title;
+    //     document.getElementById('episode_number').innerHTML = coming_next_item.media.customData.episodeNumber;
+    //     console.log('Diagnal -> current:', currentQueue);
+    //     self.notificationComing_.style.display = 'block';
+    // }
 };
 
 
