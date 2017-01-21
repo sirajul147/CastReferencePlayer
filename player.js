@@ -339,6 +339,14 @@ sampleplayer.CastPlayer = function (element) {
     this.MSG_CODE.REQUEST_GET_ALL_TRACKS = 1;
     this.MSG_CODE.REQUEST_SET_ACTIVE_TRACKS = 2;
     this.MSG_CODE.REQUEST_EMPTY = 3;
+
+    /**
+     * Temporary queue
+     * @type {Array}
+     * @private
+     */
+    this.tempQ_ = [];
+
 };
 
 
@@ -795,7 +803,11 @@ sampleplayer.CastPlayer.prototype.loadPreviewModeMetadata_ = function (media) {
     if (!sampleplayer.isCastForAudioDevice_()) {
         var metadata = media.metadata || {};
         var titleElement = this.element_.querySelector('.preview-mode-title');
-        sampleplayer.setInnerText_(titleElement, metadata.title);
+
+        var tv_title = media.customData.episodeDetail || metadata.title;
+        if(media.customData.isTrailer)
+            tv_title = metadata.title;
+        sampleplayer.setInnerText_(titleElement, tv_title);
 
         var subtitleElement = this.element_.querySelector('.preview-mode-subtitle');
         sampleplayer.setInnerText_(subtitleElement, metadata.subtitle);
@@ -881,6 +893,9 @@ sampleplayer.CastPlayer.prototype.loadVideo_ = function (info) {
 
     if('selectedAudio' in customData){
         self.selectedAudioLanguage = customData.selectedAudio;
+    }
+    if('selectedSubtitle' in customData) {
+        self.selectedSubtitleLang = customData.selectedSubtitle;
     }
 
     console.log('Diagnal Input Data', info);
@@ -969,8 +984,7 @@ sampleplayer.CastPlayer.prototype.loadVideo_ = function (info) {
  * @returns {*}
  * @private
  */
-sampleplayer.CastPlayer.prototype.checkMediaAccess_ = function (mediaId) {
-    var media = this.mediaManager_.getMediaInformation();
+sampleplayer.CastPlayer.prototype.checkMediaAccess_ = function (mediaId, media) {
     return fetch(media.customData.baseURL + 'accounts/media/' + mediaId + '/access', {
         method: "POST",
         headers: {
@@ -1009,7 +1023,7 @@ sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
                     return;
                 }
 
-                self.checkMediaAccess_(next.media_id).then(function (res) {
+                self.checkMediaAccess_(next.media_id, media).then(function (res) {
                     console.log('Media Access', res);
                     if (res.status != "ok") {
                         console.log('Diagnal -> Media access false, skip queue');
@@ -1034,6 +1048,9 @@ sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
                             var currentTime = 0;
                             if('progress' in progress)
                                 currentTime = progress.progress;
+
+                            if(currentTime > (next_media.details.length * 0.95))
+                                currentTime = 0;
 
                             var customData = {
                                 mediaId: next.media_id,
@@ -1107,23 +1124,8 @@ sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
                                 }
                             }
 
-                            var items = [queueItem];
-                            self.mediaManager_.insertQueueItems(items);
+                            self.tempQ_.push(queueItem);
 
-                            // var mediaItem = new cast.receiver.media.MediaInformation();
-                            // mediaItem.contentId = contentId;
-                            // mediaItem.contentType = "application/dash+xml";
-                            // mediaItem.duration = next.details.length;
-                            // mediaItem.streamType = "BUFFERED";
-                            // mediaItem.currentTime = 0;
-                            // mediaItem.metadata = {
-                            //     images: images,
-                            //     metadataType: 1,
-                            //     title: next.titles.default,
-                            //     subtitle: next.medium_descriptions.default || next.long_descriptions.default,
-                            // };
-                            // mediaItem.customData = customData;
-                            // self.preload(mediaItem);
                         });
                     });
                 });
@@ -1652,6 +1654,8 @@ sampleplayer.CastPlayer.prototype.onPlaying_ = function () {
     this.broadCastStreamInfo();
 
     var self = this;
+    if(!this.player_)
+        return;
     var protocol = this.player_.getStreamingProtocol();
     var streamCount = protocol.getStreamCount();
     var streamInfo;
@@ -1797,11 +1801,15 @@ sampleplayer.CastPlayer.prototype.onStop_ = function (event) {
  */
 sampleplayer.CastPlayer.prototype.onEnded_ = function () {
     this.log_('onEnded');
-    var currentQueue = this.mediaManager_.getMediaQueue();
-    console.log('Diagnal -> current:', currentQueue);
     this.setState_(sampleplayer.State.IDLE, true);
     this.hidePreviewMode_();
-    this.sendProgress_();
+
+    var media = this.mediaManager_.getMediaInformation();
+    if(!media)
+        return;
+    var currentQueue = this.mediaManager_.getMediaQueue().getItems();
+    console.log('Diagnal Current -> ', currentQueue);
+
 };
 
 /**
@@ -1811,6 +1819,8 @@ sampleplayer.CastPlayer.prototype.onEnded_ = function () {
 sampleplayer.CastPlayer.prototype.sendProgress_ = function () {
     var self = this;
     var media = this.mediaManager_.getMediaInformation();
+    if(!media)
+        return;
 
     // Skip sending progress its we're playing a trailer
     if(media.customData.isTrailer)
@@ -1859,6 +1869,13 @@ sampleplayer.CastPlayer.prototype.onProgress_ = function () {
         this.setState_(sampleplayer.State.PLAYING, false);
     }
     this.updateProgress_();
+
+    var self = this;
+    if(self.tempQ_.length) {
+        var item = self.tempQ_.pop();
+        console.log('Diagnal Item added to queue', item);
+        self.mediaManager_.insertQueueItems([item]);
+    }
 };
 
 
@@ -2019,8 +2036,9 @@ sampleplayer.CastPlayer.prototype.changeAudioTrack = function(trackId, lang) {
                 streamInfo = protocol.getStreamInfo(i);
                 if (streamInfo.mimeType.indexOf('audio') === 0) {
                     if (streamInfo.language == lang) {
-                        if(currentLanguage == i)
-                            return;
+                        if(currentLanguage == i) {
+                            break;
+                        }
                         protocol.enableStream(i, true);
                         protocol.enableStream(currentLanguage, false);
                         this.setState_(sampleplayer.State.BUFFERING, false);
@@ -2076,7 +2094,9 @@ sampleplayer.CastPlayer.prototype.changeSubtitleTrack =
     function (lang) {
         var self = this;
         self.selectedSubtitleLang = lang;
-        var mediaInformation = self.mediaManager_.getMediaInformation() || {};
+        var mediaInformation = self.mediaManager_.getMediaInformation();
+        if(!mediaInformation)
+            return;
         var tracks = mediaInformation.tracks;
 
         // Delete all previos tracks
