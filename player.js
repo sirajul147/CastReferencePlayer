@@ -330,6 +330,13 @@ sampleplayer.CastPlayer = function (element) {
 
     this.mediaManager_.onPreload = this.onPreload_.bind(this);
     this.mediaManager_.onCancelPreload = this.onCancelPreload_.bind(this);
+
+    /**
+     * Temporary queue
+     * @type {Array}
+     * @private
+     */
+    this.tempQ_ = [];
 };
 
 
@@ -927,8 +934,7 @@ sampleplayer.CastPlayer.prototype.loadVideo_ = function (info) {
  * @returns {*}
  * @private
  */
-sampleplayer.CastPlayer.prototype.checkMediaAccess_ = function (mediaId) {
-    var media = this.mediaManager_.getMediaInformation();
+sampleplayer.CastPlayer.prototype.checkMediaAccess_ = function (mediaId, media) {
     return fetch(media.customData.baseURL + 'accounts/media/' + mediaId + '/access', {
         method: "POST",
         headers: {
@@ -967,7 +973,7 @@ sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
                     return;
                 }
 
-                self.checkMediaAccess_(next.media_id).then(function (res) {
+                self.checkMediaAccess_(next.media_id, media).then(function (res) {
                     console.log('Media Access', res);
                     if (res.status != "ok") {
                         console.log('Diagnal -> Media access false, skip queue');
@@ -1036,10 +1042,7 @@ sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
                         customData: customData
                     };
 
-                    var items = [queueItem];
-                    self.mediaManager_.insertQueueItems(items);
-
-                    console.log('Diagnal Queue -> ', self.mediaManager_.getMediaQueue().getItems());
+                    self.tempQ_.push(queueItem);
                 });
             });
         }).catch(function (err) {
@@ -1686,6 +1689,15 @@ sampleplayer.CastPlayer.prototype.onProgress_ = function () {
         this.setState_(sampleplayer.State.PLAYING, false);
     }
     this.updateProgress_();
+
+    var self = this;
+    if(self.tempQ_.length) {
+        if(self.state_ !== sampleplayer.State.PLAYING)
+            return;
+        var item = self.tempQ_.pop();
+        console.log('Diagnal Item added to queue', item);
+        self.mediaManager_.insertQueueItems([item]);
+    }
 
     // show coming next
     // var self = this;
