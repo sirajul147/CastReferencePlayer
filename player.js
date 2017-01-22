@@ -909,13 +909,29 @@ sampleplayer.CastPlayer.prototype.loadVideo_ = function (info) {
                 self.player_.load(protocolFunc(host));
                 self.mediaElement_.play();
             } else {
-                self.log_('Preloaded video load');
-                self.player_ = self.preloadPlayer_;
-                self.preloadPlayer_ = null;
-                // Replace the "preload" error callback with the "load" error callback
-                self.player_.getHost().onError = loadErrorCallback;
-                self.player_.load();
-                wasPreloaded = true;
+
+                if (self.preloadPlayer_) {
+                    self.preloadPlayer_.unload();
+                    self.preloadPlayer_ = null;
+                }
+                self.log_('Regular video load');
+                var host = new cast.player.api.Host({
+                    'url': url,
+                    'mediaElement': self.mediaElement_,
+                    'licenseUrl': licenseUrl
+                });
+                host.onError = loadErrorCallback;
+                self.player_ = new cast.player.api.Player(host);
+                self.player_.load(protocolFunc(host));
+                self.mediaElement_.play();
+
+                // self.log_('Preloaded video load');
+                // self.player_ = self.preloadPlayer_;
+                // self.preloadPlayer_ = null;
+                // // Replace the "preload" error callback with the "load" error callback
+                // self.player_.getHost().onError = loadErrorCallback;
+                // self.player_.load();
+                // wasPreloaded = true;
             }
         }
         self.loadMediaManagerInfo_(info, !!protocolFunc);
@@ -1603,6 +1619,14 @@ sampleplayer.CastPlayer.prototype.customizedStatusCallback_ = function (mediaSta
         this.state_ === sampleplayer.State.BUFFERING) {
         mediaStatus.playerState = cast.receiver.media.PlayerState.BUFFERING;
     }
+
+    var self = this;
+    if(self.tempQ_.length && mediaStatus.playerState === cast.receiver.media.PlayerState.PLAYING) {
+        var item = self.tempQ_.pop();
+        console.log('Diagnal Item added to queue', item, self.player_.getState());
+        self.mediaManager_.insertQueueItems([item]);
+    }
+
     return mediaStatus;
 };
 
@@ -1633,7 +1657,7 @@ sampleplayer.CastPlayer.prototype.onStop_ = function (event) {
  */
 sampleplayer.CastPlayer.prototype.onEnded_ = function () {
     this.log_('onEnded');
-    this.setState_(sampleplayer.State.IDLE, true);
+    this.setState_(sampleplayer.State.DONE, true);
     this.hidePreviewMode_();
     this.sendProgress_();
 };
@@ -1689,15 +1713,6 @@ sampleplayer.CastPlayer.prototype.onProgress_ = function () {
         this.setState_(sampleplayer.State.PLAYING, false);
     }
     this.updateProgress_();
-
-    var self = this;
-    if(self.tempQ_.length) {
-        if(self.state_ !== sampleplayer.State.PLAYING)
-            return;
-        var item = self.tempQ_.pop();
-        console.log('Diagnal Item added to queue', item);
-        self.mediaManager_.insertQueueItems([item]);
-    }
 
     // show coming next
     // var self = this;
