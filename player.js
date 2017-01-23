@@ -646,19 +646,37 @@ sampleplayer.CastPlayer.prototype.preloadVideo_ = function (mediaInformation) {
         this.log_('No protocol found for preload');
         return false;
     }
-    var host = new cast.player.api.Host({
-        'url': url,
-        'mediaElement': self.mediaElement_
+
+    var customData = mediaInformation.customData;
+    this.getTicket_(customData).then(function (ticketData) {
+
+        if ('status' in ticketData) {
+            console.log('Diagnal -> ticket error:', ticketData);
+            return false;
+        }
+
+        var ticket = ticketData.ticket;
+        var licenseUrl = null;
+        if (ticketData.drm_type == "playready-dash") {
+            licenseUrl = ticketData.license_server_url + '?ticket=' + ticket + '&XSSESSION=' + customData.sessionToken + '&api=' + customData.baseURL;
+        }
+
+        var host = new cast.player.api.Host({
+            'url': url,
+            'mediaElement': self.mediaElement_,
+            'licenseUrl': licenseUrl,
+            'useRelativeCueTimestamps': true
+        });
+        host.onError = function () {
+            self.preloadPlayer_.unload();
+            self.preloadPlayer_ = null;
+            self.showPreviewModeMetadata(false);
+            self.displayPreviewMode_ = false;
+            self.log_('Error during preload');
+        };
+        self.preloadPlayer_ = new cast.player.api.Player(host);
+        self.preloadPlayer_.preload(protocolFunc(host));
     });
-    host.onError = function () {
-        self.preloadPlayer_.unload();
-        self.preloadPlayer_ = null;
-        self.showPreviewModeMetadata(false);
-        self.displayPreviewMode_ = false;
-        self.log_('Error during preload');
-    };
-    self.preloadPlayer_ = new cast.player.api.Player(host);
-    self.preloadPlayer_.preload(protocolFunc(host));
     return true;
 };
 
@@ -677,6 +695,7 @@ sampleplayer.CastPlayer.prototype.load = function (info) {
     var playerType = sampleplayer.getType_(media);
     var isLiveStream = media.streamType === cast.receiver.media.StreamType.LIVE;
     if (!media.contentId) {
+        console.log('Diagnal Invalid content', info);
         this.log_('Load failed: no content');
         self.onLoadMetadataError_(info);
     } else if (playerType === sampleplayer.Type.UNKNOWN) {
@@ -999,7 +1018,7 @@ sampleplayer.CastPlayer.prototype.checkMediaAccess_ = function (mediaId, media) 
 sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
     function (message) {
 
-        var media = this.mediaManager_.getMediaInformation() || message.media;
+        var media = message.media;
         console.log('Diagnal queue Item', media);
         var self = this;
 
@@ -1093,8 +1112,7 @@ sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
                             queueItem.autoplay = true;
                             queueItem.playbackDuration = next.details.length;
                             queueItem.customData = customData;
-                            queueItem.startTime = currentTime;
-                            queueItem.preloadTime = 10;
+                            queueItem.startTime = 0;
 
                             var mediaObject = new cast.receiver.media.MediaInformation();
                             mediaObject.contentId = contentId;
@@ -1125,6 +1143,7 @@ sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
                             }
 
                             self.tempQ_.push(queueItem);
+                            console.log('Diagnal Current Q ->', self.tempQ_);
 
                         });
                     });
@@ -1290,6 +1309,7 @@ sampleplayer.CastPlayer.prototype.processTtmlCues_ =
                 continue;
             }
             if (!this.player_) {
+                console.error('We do not have a player, it means we need to create it to support');
                 // We do not have a player, it means we need to create it to support
                 // loading ttml captions
                 var host = new cast.player.api.Host({
@@ -1692,15 +1712,17 @@ sampleplayer.CastPlayer.prototype.broadCastStreamInfo =
         }
 
         var tracks = this.mediaManager_.getMediaInformation() ? this.mediaManager_.getMediaInformation().tracks : [];
-        tracks = tracks.filter(function (track) {
-            return (track.type == "TEXT");
-        });
-        tracks.forEach(function (track) {
-            track.isActive = false;
-            if(track.language == self.selectedSubtitleLang) {
-                track.isActive = true;
-            }
-        });
+        if (tracks) {
+            tracks = tracks.filter(function (track) {
+                return (track.type == "TEXT");
+            });
+            tracks.forEach(function (track) {
+                track.isActive = false;
+                if (track.language == self.selectedSubtitleLang) {
+                    track.isActive = true;
+                }
+            });
+        }
 
         var protocol = this.player_.getStreamingProtocol();
         var streamCount = protocol.getStreamCount();
@@ -1771,6 +1793,7 @@ sampleplayer.CastPlayer.prototype.customizedStatusCallback_ = function (mediaSta
         this.state_ === sampleplayer.State.BUFFERING) {
         mediaStatus.playerState = cast.receiver.media.PlayerState.BUFFERING;
     }
+
     return mediaStatus;
 };
 
@@ -1803,13 +1826,6 @@ sampleplayer.CastPlayer.prototype.onEnded_ = function () {
     this.log_('onEnded');
     this.setState_(sampleplayer.State.IDLE, true);
     this.hidePreviewMode_();
-
-    var media = this.mediaManager_.getMediaInformation();
-    if(!media)
-        return;
-    var currentQueue = this.mediaManager_.getMediaQueue().getItems();
-    console.log('Diagnal Current -> ', currentQueue);
-
 };
 
 /**
@@ -1871,10 +1887,17 @@ sampleplayer.CastPlayer.prototype.onProgress_ = function () {
     this.updateProgress_();
 
     var self = this;
-    if(self.tempQ_.length) {
-        var item = self.tempQ_.pop();
-        console.log('Diagnal Item added to queue', item);
-        self.mediaManager_.insertQueueItems([item]);
+    var duration = this.mediaElement_.duration;
+    var currentTime = this.mediaElement_.currentTime;
+    if((duration - currentTime) < 10) {
+        if(this.tempQ_.length) {
+            var item = this.tempQ_.pop();
+            this.preload(item.media);
+            setTimeout(function () {
+                self.load(new cast.receiver.MediaManager.LoadInfo(item));
+                self.mediaManager_.setMediaInformation(item.media, true);
+            }, 7500);
+        }
     }
 };
 
