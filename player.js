@@ -841,16 +841,6 @@ sampleplayer.CastPlayer.prototype.loadVideo_ = function (info) {
     var customData = info.message.media.customData;
     console.log('Diagnal Input Data', info);
 
-    // var currentQueue = this.mediaManager_.getMediaQueue().getItems();
-    // currentQueue.forEach(function (qItem, index) {
-        // if(qItem.itemId == 1)
-        //     return true;
-        // console.log('Delete queue item', qItem);
-        // delete currentQueue[index];
-    // });
-
-    console.log('Diagnal Queue -> ', this.mediaManager_.getMediaQueue().getItems());
-
     this.getTicket_(customData).then(function (ticketData) {
 
         if('status' in ticketData) {
@@ -919,7 +909,7 @@ sampleplayer.CastPlayer.prototype.loadVideo_ = function (info) {
             }
         }
         self.loadMediaManagerInfo_(info, !!protocolFunc);
-        if(self.tempQ_.length == 0)
+        if(self.tempQ_.length == 1)
             self.queueNextEpisode_(info.message);
         return wasPreloaded;
 
@@ -1697,22 +1687,28 @@ sampleplayer.CastPlayer.prototype.onProgress_ = function () {
     this.updateProgress_();
 
     // show coming next
-    // var self = this;
-    // var duration = this.mediaElement_.duration;
-    // var currentTime = this.mediaElement_.currentTime;
-    // if((duration - currentTime) < 30) {
-    //     if(self.notificationComing_.style.display == 'block')
-    //         return;
-    //     var currentQueue = this.mediaManager_.getMediaQueue().getItems();
-    //     if(currentQueue.length < 2)
-    //         return;
-    //     var coming_next_item = currentQueue[1];
-    //     // Set the values
-    //     document.getElementById('episode_title').innerHTML = coming_next_item.media.metadata.title;
-    //     document.getElementById('episode_number').innerHTML = coming_next_item.media.customData.episodeNumber;
-    //     console.log('Diagnal -> current:', currentQueue);
-    //     self.notificationComing_.style.display = 'block';
-    // }
+    var self = this;
+    var duration = this.mediaElement_.duration;
+    var currentTime = this.mediaElement_.currentTime;
+    var preloadTime = 0.05 * duration;
+
+    // countdown
+    document.getElementById('countdown').innerHTML = Math.ceil(duration - currentTime);
+    this.notificationComing_.style.display = 'none';
+
+    if((duration - currentTime) < preloadTime) {
+        if(self.notificationComing_.style.display == 'block')
+            return;
+        var currentQueue = this.tempQ_;
+        if(currentQueue.length < 2)
+            return;
+        var coming_next_item = currentQueue[1];
+        // Set the values
+        document.getElementById('episode_title').innerHTML = coming_next_item.media.metadata.title;
+        document.getElementById('episode_number').innerHTML = coming_next_item.media.customData.episodeNumber;
+        console.log('Diagnal -> current:', currentQueue);
+        self.notificationComing_.style.display = 'block';
+    }
 };
 
 
@@ -1827,7 +1823,9 @@ sampleplayer.CastPlayer.prototype.onLoad_ = function (event) {
     this.log_('onLoad_');
     // Clear Q if its a new request from sender
     if(event.senderId) {
-        this.tempQ_ = [];
+        this.tempQ_ = [event.data.media];
+    } else {
+        this.tempQ_.shift();
     }
     this.notificationComing_.style.display = 'none';
     this.cancelDeferredPlay_('new media is loaded');
