@@ -909,33 +909,18 @@ sampleplayer.CastPlayer.prototype.loadVideo_ = function (info) {
                 self.player_.load(protocolFunc(host));
                 self.mediaElement_.play();
             } else {
-
-                if (self.preloadPlayer_) {
-                    self.preloadPlayer_.unload();
-                    self.preloadPlayer_ = null;
-                }
-                self.log_('Regular video load');
-                var host = new cast.player.api.Host({
-                    'url': url,
-                    'mediaElement': self.mediaElement_,
-                    'licenseUrl': licenseUrl
-                });
-                host.onError = loadErrorCallback;
-                self.player_ = new cast.player.api.Player(host);
-                self.player_.load(protocolFunc(host));
-                self.mediaElement_.play();
-
-                // self.log_('Preloaded video load');
-                // self.player_ = self.preloadPlayer_;
-                // self.preloadPlayer_ = null;
-                // // Replace the "preload" error callback with the "load" error callback
-                // self.player_.getHost().onError = loadErrorCallback;
-                // self.player_.load();
-                // wasPreloaded = true;
+                self.log_('Preloaded video load');
+                self.player_ = self.preloadPlayer_;
+                self.preloadPlayer_ = null;
+                // Replace the "preload" error callback with the "load" error callback
+                self.player_.getHost().onError = loadErrorCallback;
+                self.player_.load();
+                wasPreloaded = true;
             }
         }
         self.loadMediaManagerInfo_(info, !!protocolFunc);
-        self.queueNextEpisode_(info.message);
+        if(self.tempQ_.length == 0)
+            self.queueNextEpisode_(info.message);
         return wasPreloaded;
 
     }).catch(function (err) {
@@ -965,7 +950,8 @@ sampleplayer.CastPlayer.prototype.checkMediaAccess_ = function (mediaId, media) 
 sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
     function (message) {
 
-        var media = this.mediaManager_.getMediaInformation() || message.media;
+        // var media = this.mediaManager_.getMediaInformation() || message.media;
+        var media = message.media;
         console.log('Diagnal queue Item', media);
         var self = this;
 
@@ -1042,7 +1028,7 @@ sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
 
                     var duration = content.details.length;
                     var preloadTime = 0.05 * duration;
-                    queueItem.preloadTime = preloadTime;
+                    // queueItem.preloadTime = preloadTime;
                     queueItem.media = {
                         contentId: contentId,
                         contentType: "application/dash+xml",
@@ -1059,6 +1045,9 @@ sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
                     };
 
                     self.tempQ_.push(queueItem);
+                    self.mediaManager_.insertQueueItems([queueItem]);
+                    self.queueNextEpisode_(queueItem);
+
                 });
             });
         }).catch(function (err) {
@@ -1620,13 +1609,6 @@ sampleplayer.CastPlayer.prototype.customizedStatusCallback_ = function (mediaSta
         mediaStatus.playerState = cast.receiver.media.PlayerState.BUFFERING;
     }
 
-    var self = this;
-    if(self.tempQ_.length && mediaStatus.playerState === cast.receiver.media.PlayerState.PLAYING) {
-        var item = self.tempQ_.pop();
-        console.log('Diagnal Item added to queue', item, self.player_.getState());
-        self.mediaManager_.insertQueueItems([item]);
-    }
-
     return mediaStatus;
 };
 
@@ -1843,6 +1825,10 @@ sampleplayer.CastPlayer.prototype.onCancelPreload_ = function (event) {
  */
 sampleplayer.CastPlayer.prototype.onLoad_ = function (event) {
     this.log_('onLoad_');
+    // Clear Q if its a new request from sender
+    if(event.senderId) {
+        this.tempQ_ = [];
+    }
     this.notificationComing_.style.display = 'none';
     this.cancelDeferredPlay_('new media is loaded');
     this.load(new cast.receiver.MediaManager.LoadInfo(
