@@ -124,6 +124,12 @@ sampleplayer.CastPlayer = function (element) {
     this.idleTimerId_;
 
     /**
+     *
+     */
+    this.loadTimer_;
+    this.queuedForNextBtn = false;
+
+    /**
      * The id of timer to handle seeking UI.
      * @private {number|undefined}
      */
@@ -687,22 +693,98 @@ sampleplayer.CastPlayer.prototype.preloadVideo_ = function (mediaInformation) {
  * @export
  */
 sampleplayer.CastPlayer.prototype.load = function (info) {
-    this.log_('onLoad_');
-    clearTimeout(this.idleTimerId_);
+
     var self = this;
+    console.log('Diagnal Load timer', this.loadTimer_);
+    if(this.loadTimer_) {
+        clearTimeout(this.loadTimer_);
+    }
+    this.loadTimer_ = setTimeout(function () {
+
+        self.queuedForNextBtn = false;
+        self.log_('onLoad_');
+        clearTimeout(self.idleTimerId_);
+        var media = info.message.media || {};
+        var contentType = media.contentType;
+        var playerType = sampleplayer.getType_(media);
+        var isLiveStream = media.streamType === cast.receiver.media.StreamType.LIVE;
+        if (!media.contentId) {
+            console.log('Diagnal Invalid content', info);
+            self.log_('Load failed: no content');
+            self.onLoadMetadataError_(info);
+        } else if (playerType === sampleplayer.Type.UNKNOWN) {
+            self.log_('Load failed: unknown content type: ' + contentType);
+            self.onLoadMetadataError_(info);
+        } else {
+            self.log_('Loading: ' + playerType);
+            self.resetMediaElement_();
+            self.setType_(playerType, isLiveStream);
+            var preloaded = false;
+            switch (playerType) {
+                case sampleplayer.Type.AUDIO:
+                    self.loadAudio_(info);
+                    break;
+                case sampleplayer.Type.VIDEO:
+                    preloaded = self.loadVideo_(info);
+                    break;
+            }
+            self.playerReady_ = false;
+            self.metadataLoaded_ = false;
+            self.loadMetadata_(media);
+            self.showPreviewModeMetadata(false);
+            self.displayPreviewMode_ = false;
+            sampleplayer.preload_(media, function () {
+                self.log_('preloaded=' + preloaded);
+                if (preloaded) {
+                    // Data is ready to play so transiton directly to playing.
+                    self.setState_(sampleplayer.State.PLAYING, false);
+                    self.playerReady_ = true;
+                    self.maybeSendLoadCompleted_(info);
+                    // Don't display metadata again, since autoplay already did that.
+                    self.deferPlay_(3);
+                    self.playerAutoPlay_ = false;
+                } else {
+                    sampleplayer.transition_(self.element_, sampleplayer.TRANSITION_DURATION_, function () {
+                        self.setState_(sampleplayer.State.LOADING, false);
+                        // Only send load completed after we reach this point so the media
+                        // manager state is still loading and the sender can't send any PLAY
+                        // messages
+                        self.playerReady_ = true;
+                        self.maybeSendLoadCompleted_(info);
+                        if (self.playerAutoPlay_) {
+                            // Make sure media info is displayed long enough before playback
+                            // starts.
+                            self.deferPlay_(sampleplayer.MEDIA_INFO_DURATION_);
+                            self.playerAutoPlay_ = false;
+                        }
+                    });
+                }
+            });
+        }
+
+    }, 3000);
+};
+
+
+sampleplayer.CastPlayer.prototype.loadWithoutDelay = function (info) {
+
+    var self = this;
+    self.queuedForNextBtn = false;
+    self.log_('onLoad_');
+    clearTimeout(self.idleTimerId_);
     var media = info.message.media || {};
     var contentType = media.contentType;
     var playerType = sampleplayer.getType_(media);
     var isLiveStream = media.streamType === cast.receiver.media.StreamType.LIVE;
     if (!media.contentId) {
         console.log('Diagnal Invalid content', info);
-        this.log_('Load failed: no content');
+        self.log_('Load failed: no content');
         self.onLoadMetadataError_(info);
     } else if (playerType === sampleplayer.Type.UNKNOWN) {
-        this.log_('Load failed: unknown content type: ' + contentType);
+        self.log_('Load failed: unknown content type: ' + contentType);
         self.onLoadMetadataError_(info);
     } else {
-        this.log_('Loading: ' + playerType);
+        self.log_('Loading: ' + playerType);
         self.resetMediaElement_();
         self.setType_(playerType, isLiveStream);
         var preloaded = false;
@@ -727,7 +809,7 @@ sampleplayer.CastPlayer.prototype.load = function (info) {
                 self.playerReady_ = true;
                 self.maybeSendLoadCompleted_(info);
                 // Don't display metadata again, since autoplay already did that.
-                self.deferPlay_(0);
+                self.deferPlay_(3);
                 self.playerAutoPlay_ = false;
             } else {
                 sampleplayer.transition_(self.element_, sampleplayer.TRANSITION_DURATION_, function () {
@@ -747,6 +829,7 @@ sampleplayer.CastPlayer.prototype.load = function (info) {
             }
         });
     }
+
 };
 
 /**
@@ -1142,8 +1225,9 @@ sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
                                 }
                             }
 
+                            self.tempQ_ = [];
                             self.tempQ_.push(queueItem);
-                            console.log('Diagnal Current Q ->', self.tempQ_);
+                            console.log('Diagnal Temp Q ->', self.tempQ_);
 
                         });
                     });
@@ -1794,6 +1878,13 @@ sampleplayer.CastPlayer.prototype.customizedStatusCallback_ = function (mediaSta
         mediaStatus.playerState = cast.receiver.media.PlayerState.BUFFERING;
     }
 
+    if(this.mediaManager_) {
+        if(this.tempQ_.length && mediaStatus.playerState === cast.receiver.media.PlayerState.PLAYING && !this.queuedForNextBtn) {
+            this.queuedForNextBtn = true;
+            this.mediaManager_.insertQueueItems(this.tempQ_);
+        }
+    }
+
     return mediaStatus;
 };
 
@@ -1869,6 +1960,7 @@ sampleplayer.CastPlayer.prototype.onAbort_ = function () {
     this.log_('onAbort');
     this.setState_(sampleplayer.State.IDLE, true);
     this.hidePreviewMode_();
+    this.sendProgress_();
 };
 
 
@@ -1894,7 +1986,7 @@ sampleplayer.CastPlayer.prototype.onProgress_ = function () {
             var item = this.tempQ_.pop();
             this.preload(item.media);
             setTimeout(function () {
-                self.load(new cast.receiver.MediaManager.LoadInfo(item));
+                self.loadWithoutDelay(new cast.receiver.MediaManager.LoadInfo(item));
                 self.mediaManager_.setMediaInformation(item.media, true);
             }, 7500);
         }
@@ -2013,6 +2105,13 @@ sampleplayer.CastPlayer.prototype.onCancelPreload_ = function (event) {
 sampleplayer.CastPlayer.prototype.onLoad_ = function (event) {
     this.log_('onLoad_');
     this.cancelDeferredPlay_('new media is loaded');
+    if(!event.senderId) {
+        console.log('Diagnal Next click');
+        var item = this.tempQ_.pop();
+        this.loadWithoutDelay(new cast.receiver.MediaManager.LoadInfo(item));
+        this.mediaManager_.setMediaInformation(item.media, true);
+        return;
+    }
     this.load(new cast.receiver.MediaManager.LoadInfo(
         /** @type {!cast.receiver.MediaManager.LoadRequestData} */ (event.data),
         event.senderId));
