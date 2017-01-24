@@ -701,7 +701,6 @@ sampleplayer.CastPlayer.prototype.load = function (info) {
     }
     this.loadTimer_ = setTimeout(function () {
 
-        self.queuedForNextBtn = false;
         self.log_('onLoad_');
         clearTimeout(self.idleTimerId_);
         var media = info.message.media || {};
@@ -769,7 +768,6 @@ sampleplayer.CastPlayer.prototype.load = function (info) {
 sampleplayer.CastPlayer.prototype.loadWithoutDelay = function (info) {
 
     var self = this;
-    self.queuedForNextBtn = false;
     self.log_('onLoad_');
     clearTimeout(self.idleTimerId_);
     var media = info.message.media || {};
@@ -1878,10 +1876,14 @@ sampleplayer.CastPlayer.prototype.customizedStatusCallback_ = function (mediaSta
         mediaStatus.playerState = cast.receiver.media.PlayerState.BUFFERING;
     }
 
+    var qItem = null;
     if(this.mediaManager_) {
         if(this.tempQ_.length && mediaStatus.playerState === cast.receiver.media.PlayerState.PLAYING && !this.queuedForNextBtn) {
             this.queuedForNextBtn = true;
-            this.mediaManager_.insertQueueItems(this.tempQ_);
+            qItem = this.tempQ_[0];
+            delete qItem.itemId;
+            console.log('Diagnal Add Item to Q', qItem);
+            this.mediaManager_.insertQueueItems([qItem]);
         }
     }
 
@@ -2105,6 +2107,7 @@ sampleplayer.CastPlayer.prototype.onCancelPreload_ = function (event) {
 sampleplayer.CastPlayer.prototype.onLoad_ = function (event) {
     this.log_('onLoad_');
     this.cancelDeferredPlay_('new media is loaded');
+    this.queuedForNextBtn = false;
     if(!event.senderId) {
         console.log('Diagnal Next click');
         var item = this.tempQ_.pop();
