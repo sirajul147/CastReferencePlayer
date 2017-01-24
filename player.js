@@ -1193,15 +1193,15 @@ sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
 
                             var queueItem = new cast.receiver.media.QueueItem();
                             queueItem.autoplay = true;
-                            queueItem.playbackDuration = next.details.length;
+                            queueItem.playbackDuration = Number(next.details.length);
                             queueItem.customData = customData;
                             queueItem.startTime = 0;
 
                             var mediaObject = new cast.receiver.media.MediaInformation();
                             mediaObject.contentId = contentId;
                             mediaObject.contentType = "application/dash+xml";
-                            mediaObject.duration = next.details.length;
-                            mediaObject.streamType = "BUFFERED";
+                            mediaObject.duration = Number(next.details.length);
+                            mediaObject.streamType = cast.receiver.media.StreamType.BUFFERED;
                             mediaObject.metadata = {
                                 images: images,
                                 metadataType: 1,
