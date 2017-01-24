@@ -128,6 +128,8 @@ sampleplayer.CastPlayer = function (element) {
      */
     this.loadTimer_;
     this.queuedForNextBtn = false;
+    this.reachedLastEpisode = false;
+    this.lastAddedItem = [];
 
     /**
      * The id of timer to handle seeking UI.
@@ -1120,6 +1122,7 @@ sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
                 console.log('Diagnal Next data', next);
                 if ('status' in next) {
                     console.log('Diagnal Reached Last Episode');
+                    self.reachedLastEpisode = true;
                     return;
                 }
 
@@ -1884,6 +1887,13 @@ sampleplayer.CastPlayer.prototype.customizedStatusCallback_ = function (mediaSta
             delete qItem.itemId;
             console.log('Diagnal Add Item to Q', qItem);
             this.mediaManager_.insertQueueItems([qItem]);
+            this.lastAddedItem.push(qItem.itemId);
+        }
+        if(this.reachedLastEpisode && mediaStatus.playerState === cast.receiver.media.PlayerState.PLAYING) {
+            this.reachedLastEpisode = false;
+            console.log('Diagnal Remove Items from Q', this.lastAddedItem);
+            this.mediaManager_.removeQueueItems(this.lastAddedItem);
+            this.lastAddedItem = [];
         }
     }
 
@@ -2108,11 +2118,13 @@ sampleplayer.CastPlayer.prototype.onLoad_ = function (event) {
     this.log_('onLoad_');
     this.cancelDeferredPlay_('new media is loaded');
     this.queuedForNextBtn = false;
+    this.reachedLastEpisode = false;
     if(!event.senderId) {
         console.log('Diagnal Next click');
         var item = this.tempQ_.pop();
         this.loadWithoutDelay(new cast.receiver.MediaManager.LoadInfo(item));
         this.mediaManager_.setMediaInformation(item.media, true);
+        this.lastAddedItem = [];
         return;
     }
     this.load(new cast.receiver.MediaManager.LoadInfo(
