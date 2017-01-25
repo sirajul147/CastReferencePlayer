@@ -1112,17 +1112,18 @@ sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
 
                     var queueItem = new cast.receiver.media.QueueItem();
                     queueItem.autoplay = true;
-                    queueItem.playbackDuration = next.details.length;
+                    queueItem.playbackDuration = Number(next.details.length);
                     queueItem.customData = customData;
 
                     var duration = content.details.length;
                     var preloadTime = 0.05 * duration;
                     // queueItem.preloadTime = preloadTime;
+
                     queueItem.media = {
                         contentId: contentId,
                         contentType: "application/dash+xml",
-                        duration: next.details.length,
-                        streamType: "BUFFERED",
+                        duration: Number(next.details.length),
+                        streamType: cast.receiver.media.StreamType.BUFFERED,
                         currentTime: 0,
                         metadata: {
                             images: images,
