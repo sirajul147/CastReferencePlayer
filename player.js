@@ -1008,7 +1008,7 @@ sampleplayer.CastPlayer.prototype.loadVideo_ = function (info) {
             }
         }
         self.loadMediaManagerInfo_(info, !!protocolFunc);
-        if(customData.typeofItem == 'episode')
+        if(customData.typeofItem.toLocaleLowerCase() == 'episode')
             self.queueNextEpisode_(info.message);
         return wasPreloaded;
 

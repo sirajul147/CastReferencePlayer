@@ -99,6 +99,17 @@ body {
     overflow: hidden;
 }
 
+.player .media-info .logo-media {
+    background-size: contain;
+    background-repeat: no-repeat;
+    position: fixed;
+    top: 10%;
+    right: 8%;
+    background-image: url("assets/squarelogo.png");
+    width: 120px;
+    height: 120px;
+}
+
 .player .media-artwork {
     background-size: contain;
     background-position: center;
