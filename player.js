@@ -697,7 +697,7 @@ sampleplayer.CastPlayer.prototype.preloadVideo_ = function (mediaInformation) {
 sampleplayer.CastPlayer.prototype.load = function (info) {
 
     var self = this;
-    console.log('Diagnal Load timer', this.loadTimer_);
+    // console.log('Diagnal Load timer', this.loadTimer_);
     if(this.loadTimer_) {
         clearTimeout(this.loadTimer_);
     }
@@ -1207,6 +1207,7 @@ sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
                                 images: images,
                                 metadataType: 1,
                                 title: next_media.series[0].titles.default,
+                                studio: next.titles.default,
                                 subtitle: next.medium_descriptions.default || next.long_descriptions.default
                             };
                             mediaObject.customData = customData;
@@ -2127,6 +2128,7 @@ sampleplayer.CastPlayer.prototype.onLoad_ = function (event) {
         this.lastAddedItem = [];
         return;
     }
+    this.tempQ_ = [];
     this.load(new cast.receiver.MediaManager.LoadInfo(
         /** @type {!cast.receiver.MediaManager.LoadRequestData} */ (event.data),
         event.senderId));
