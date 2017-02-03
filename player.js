@@ -1743,6 +1743,8 @@ sampleplayer.CastPlayer.prototype.sendProgress_ = function () {
     var media = this.mediaManager_.getMediaInformation();
     if(!media)
         return;
+    if(media.customData.typeofItem.toLowerCase() == 'trailer')
+        return;
     fetch(media.customData.baseURL + 'player/progress', {
             method: 'PUT',
             body: JSON.stringify({
