@@ -342,6 +342,7 @@ sampleplayer.CastPlayer = function (element) {
      * @private
      */
     this.tempQ_ = [];
+    this.preloadTime_ = 10;
 };
 
 
@@ -1008,8 +1009,7 @@ sampleplayer.CastPlayer.prototype.loadVideo_ = function (info) {
             }
         }
         self.loadMediaManagerInfo_(info, !!protocolFunc);
-        if(customData.typeofItem.toLocaleLowerCase() == 'episode')
-            self.queueNextEpisode_(info.message);
+        self.queueNextEpisode_(info.message);
         return wasPreloaded;
 
     }).catch(function (err) {
@@ -1051,6 +1051,17 @@ sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
             if(!content.series.length)
                 return;
 
+            var tags = content.tags;
+            var next = 10;
+            tags.forEach(function (tag) {
+                if(tag.indexOf('next') > -1) {
+                    var parts = tag.split('-');
+                    next = parts[1];
+                }
+            })
+            self.preloadTime_ = next;
+            console.log('Diagnal -> Preload next in -> ', self.preloadTime_);
+
             var series_id = content.series[0].id;
             var season_id = content.series[0].seasons[0].id;
             var episode_id = content.series[0].seasons[0].episodes[0].id;
@@ -1087,13 +1098,23 @@ sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
 
                     var streams = next.streams.web, contentId = null;
                     streams.forEach(function (stream) {
-                        if (!('drm' in stream))
+                        if (!('drm' in stream)) {
                             return true;
+                        }
                         if (stream.drm.type == 'playready-dash') {
                             customData.streamID = stream.id;
                             contentId = stream.src;
                         }
                     });
+
+                    if(!contentId) {
+                        streams.forEach(function (stream) {
+                            if (stream.type == 'mpd') {
+                                customData.streamID = stream.id;
+                                contentId = stream.src;
+                            }
+                        });
+                    }
 
                     var images = [];
                     var imageList = media.customData.imageList;
@@ -1116,8 +1137,6 @@ sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
                     queueItem.customData = customData;
 
                     var duration = content.details.length;
-                    var preloadTime = 0.05 * duration;
-                    // queueItem.preloadTime = preloadTime;
 
                     queueItem.media = {
                         contentId: contentId,
@@ -1792,14 +1811,17 @@ sampleplayer.CastPlayer.prototype.onProgress_ = function () {
     var self = this;
     var duration = this.mediaElement_.duration;
     var currentTime = this.mediaElement_.currentTime;
-    if((duration - currentTime) < 10) {
+    if((duration - currentTime) < self.preloadTime_) {
         if(this.tempQ_.length) {
             var item = this.tempQ_.pop();
+            var diff = Math.round(duration - currentTime - 3);
+            console.log('Diagnal Preload', item, diff);
             this.preload(item.media);
             setTimeout(function () {
+                console.log('Diagnal -> Start next episode loading......!!!')
                 self.loadWithoutDelay(new cast.receiver.MediaManager.LoadInfo(item));
                 self.mediaManager_.setMediaInformation(item.media, true);
-            }, 7500);
+            }, diff * 1000);
         }
     }
 };
