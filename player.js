@@ -1760,10 +1760,12 @@ sampleplayer.CastPlayer.prototype.onEnded_ = function () {
 sampleplayer.CastPlayer.prototype.sendProgress_ = function () {
     var self = this;
     var media = this.mediaManager_.getMediaInformation();
-    if(!media)
+    if(!media) {
         return;
-    if(media.customData.typeofItem.toLowerCase() == 'trailer')
+    }
+    if(media.customData.typeofItem.toLowerCase() == 'trailer') {
         return;
+    }
     fetch(media.customData.baseURL + 'player/progress', {
             method: 'PUT',
             body: JSON.stringify({
@@ -1778,7 +1780,7 @@ sampleplayer.CastPlayer.prototype.sendProgress_ = function () {
     ).then(function (res) {
         return res.json();
     }).then(function (res) {
-        console.log('Send progress', res);
+        console.log('Diagnal -> Send progress', res);
     });
 };
 
