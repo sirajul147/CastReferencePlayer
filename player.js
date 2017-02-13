@@ -904,7 +904,7 @@ sampleplayer.CastPlayer.prototype.loadAudio_ = function (info) {
  * @private
  */
 sampleplayer.CastPlayer.prototype.getTicket_= function (data) {
-    if(data.typeofItem == "Trailer") {
+    if(data.typeofItem == "Trailer" || !data.sessionToken) {
         console.log('Diagnal -> Skip Ticket Call');
         return Promise.resolve({
             ticket: null,
@@ -1025,6 +1025,11 @@ sampleplayer.CastPlayer.prototype.loadVideo_ = function (info) {
  * @private
  */
 sampleplayer.CastPlayer.prototype.checkMediaAccess_ = function (mediaId, media) {
+    if(!media.customData.sessionToken) {
+        return Promise.resolve({
+            status: 'anonymous'
+        });
+    }
     return fetch(media.customData.baseURL + 'accounts/media/' + mediaId + '/access', {
         method: "POST",
         headers: {
@@ -1076,8 +1081,13 @@ sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
                 }
 
                 self.checkMediaAccess_(next.media_id, media).then(function (res) {
-                    console.log('Media Access', res);
-                    if (res.status != "ok") {
+                    console.log('Diagnal Media Access', res);
+                    if(res.status == 'anonymous') {
+                        if (next.tags.indexOf("anonymous-access") == -1) {
+                            console.log('Diagnal -> Media access missing for anonymous, skip queue');
+                            return;
+                        }
+                    } else if (res.status != "ok") {
                         console.log('Diagnal -> Media access false, skip queue');
                         return;
                     }
@@ -1761,6 +1771,9 @@ sampleplayer.CastPlayer.prototype.sendProgress_ = function () {
     var self = this;
     var media = this.mediaManager_.getMediaInformation();
     if(!media) {
+        return;
+    }
+    if(!media.customData.sessionToken) {
         return;
     }
     if(media.customData.typeofItem.toLowerCase() == 'trailer') {
