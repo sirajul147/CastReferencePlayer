@@ -904,7 +904,7 @@ sampleplayer.CastPlayer.prototype.loadAudio_ = function (info) {
  * @private
  */
 sampleplayer.CastPlayer.prototype.getTicket_= function (data) {
-    if(data.typeofItem == "Trailer" || !data.sessionToken) {
+    if(data.typeofItem.toLowerCase() == "trailer" || !data.sessionToken) {
         console.log('Diagnal -> Skip Ticket Call');
         return Promise.resolve({
             ticket: null,
@@ -1044,10 +1044,17 @@ sampleplayer.CastPlayer.prototype.checkMediaAccess_ = function (mediaId, media) 
 sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
     function (message) {
 
-        // var media = this.mediaManager_.getMediaInformation() || message.media;
-        var media = message.media;
-        console.log('Diagnal queue Item', media);
         var self = this;
+        var media = message.media;
+        // console.log('Diagnal queue Item', media);
+
+        // Clear current queue
+        self.tempQ_ = [];
+
+        if(media.customData.typeofItem.toLowerCase() == 'trailer') {
+            console.log('Diagnal -> Playing Preview/Trailer, skip queuing');
+            return;
+        }
 
         // Queue episode only if series
         fetch(media.customData.baseURL + 'media/videos/' + media.customData.mediaId).then(function (res) {
@@ -1163,7 +1170,6 @@ sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
                         customData: customData
                     };
 
-                    self.tempQ_ = [];
                     self.tempQ_.push(queueItem);
                     console.log('Diagnal Temp Q ->', self.tempQ_);
 
@@ -1952,13 +1958,13 @@ sampleplayer.CastPlayer.prototype.onCancelPreload_ = function (event) {
 sampleplayer.CastPlayer.prototype.onLoad_ = function (event) {
     this.log_('onLoad_');
     this.cancelDeferredPlay_('new media is loaded');
-    if(!event.senderId) {
-        console.log('Diagnal Next click');
-        var item = this.tempQ_.pop();
-        this.loadWithoutDelay(new cast.receiver.MediaManager.LoadInfo(item));
-        this.mediaManager_.setMediaInformation(item.media, true);
-        return;
-    }
+    // if(!event.senderId) {
+    //     console.log('Diagnal Next click');
+    //     var item = this.tempQ_.pop();
+    //     this.loadWithoutDelay(new cast.receiver.MediaManager.LoadInfo(item));
+    //     this.mediaManager_.setMediaInformation(item.media, true);
+    //     return;
+    // }
     this.load(new cast.receiver.MediaManager.LoadInfo(
         /** @type {!cast.receiver.MediaManager.LoadRequestData} */ (event.data),
         event.senderId));
