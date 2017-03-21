@@ -78,7 +78,7 @@ sampleplayer.CastPlayer = function (element) {
      * The debug setting to control receiver, MPL and player logging.
      * @private {boolean}
      */
-    this.debug_ = sampleplayer.ENABLE_DEBUG_;
+    this.debug_ = sampleplayer.DISABLE_DEBUG_;
     if (this.debug_) {
         cast.player.api.setLoggerLevel(cast.player.api.LoggerLevel.DEBUG);
         cast.receiver.logger.setLevelValue(cast.receiver.LoggerLevel.DEBUG);
@@ -929,6 +929,31 @@ sampleplayer.CastPlayer.prototype.getTicket_= function (data) {
 };
 
 /**
+ * Get playback progress
+ * @param token
+ * @returns {*}
+ * @private
+ */
+sampleplayer.CastPlayer.prototype.getProgress_ = function (data) {
+    if(!data.sessionToken) {
+        return Promise.resolve({
+            success: false
+        });
+    } else {
+        return fetch(data.baseURL + 'player/progress/' + data.mediaId, {
+            headers: {
+                "Content-Type": "application/json",
+                "XSSESSION": data.sessionToken
+            }
+        }).then(function (progress) {
+            return progress.json()
+        }).then(function (progress) {
+            return progress;
+        });
+    }
+}
+
+/**
  * Loads some video content.
  *
  * @param {!cast.receiver.MediaManager.LoadInfo} info The load request info.
@@ -941,80 +966,97 @@ sampleplayer.CastPlayer.prototype.loadVideo_ = function (info) {
     var customData = info.message.media.customData;
     console.log('Diagnal Input Data', info);
 
-    this.getTicket_(customData).then(function (ticketData) {
+    this.getProgress_(customData).then(function (progress_data) {
 
-        if('status' in ticketData) {
-            console.log('Diagnal -> ticket error:', ticketData);
-            return false;
-        }
-
-        var ticket = ticketData.ticket;
-        var licenseUrl = null;
-        if(ticketData.drm_type == "playready-dash") {
-            licenseUrl = ticketData.license_server_url + '?ticket=' + ticket + '&XSSESSION=' + customData.sessionToken + '&api=' + customData.baseURL;
-        }
-
-        var protocolFunc = null;
-        var url = info.message.media.contentId;
-        var protocolFunc = sampleplayer.getProtocolFunction_(info.message.media);
-        var wasPreloaded = false;
-
-        self.letPlayerHandleAutoPlay_(info);
-        if (!protocolFunc) {
-            self.log_('loadVideo_: using MediaElement');
-            self.mediaElement_.addEventListener('stalled', self.bufferingHandler_,
-                false);
-            self.mediaElement_.addEventListener('waiting', self.bufferingHandler_,
-                false);
+        /**
+         * Override progress send from sender
+         */
+        if(progress_data.hasOwnProperty('success') && progress_data.success == false) {
+            console.log('Diagnal no progress data', progress_data);
+            // Anonymous user
         } else {
-            self.log_('loadVideo_: using Media Player Library');
-            // When MPL is used, buffering status should be detected by
-            // getState()['underflow]'
-            self.mediaElement_.removeEventListener('stalled', self.bufferingHandler_);
-            self.mediaElement_.removeEventListener('waiting', self.bufferingHandler_);
-
-            // If we have not preloaded or the content preloaded does not match the
-            // content that needs to be loaded, perform a full load
-            var loadErrorCallback = function () {
-                // unload player and trigger error event on media element
-                if (self.player_) {
-                    self.resetMediaElement_();
-                    self.mediaElement_.dispatchEvent(new Event('error'));
-                }
-            };
-            if (!self.preloadPlayer_ || (self.preloadPlayer_.getHost &&
-                self.preloadPlayer_.getHost().url != url)) {
-                if (self.preloadPlayer_) {
-                    self.preloadPlayer_.unload();
-                    self.preloadPlayer_ = null;
-                }
-                self.log_('Regular video load');
-                var host = new cast.player.api.Host({
-                    'url': url,
-                    'mediaElement': self.mediaElement_,
-                    'licenseUrl': licenseUrl
-                });
-                host.onError = loadErrorCallback;
-                self.player_ = new cast.player.api.Player(host);
-                self.player_.load(protocolFunc(host));
-                self.mediaElement_.play();
-            } else {
-                self.log_('Preloaded video load');
-                self.player_ = self.preloadPlayer_;
-                self.preloadPlayer_ = null;
-                // Replace the "preload" error callback with the "load" error callback
-                self.player_.getHost().onError = loadErrorCallback;
-                self.player_.load();
-                wasPreloaded = true;
+            console.log('Diagnal progress data override -> ', progress_data);
+            if(progress_data.hasOwnProperty('progress')) {
+                info.message.currentTime = progress_data.progress;
             }
         }
-        self.loadMediaManagerInfo_(info, !!protocolFunc);
-        self.queueNextEpisode_(info.message);
-        return wasPreloaded;
 
-    }).catch(function (err) {
-        self.log_('Ticket Call Failed');
-        console.error(err);
+        self.getTicket_(customData).then(function (ticketData) {
+
+            if('status' in ticketData) {
+                console.log('Diagnal -> ticket error:', ticketData);
+                return false;
+            }
+
+            var ticket = ticketData.ticket;
+            var licenseUrl = null;
+            if(ticketData.drm_type == "playready-dash") {
+                licenseUrl = ticketData.license_server_url + '?ticket=' + ticket + '&XSSESSION=' + customData.sessionToken + '&api=' + customData.baseURL;
+            }
+
+            var protocolFunc = null;
+            var url = info.message.media.contentId;
+            var protocolFunc = sampleplayer.getProtocolFunction_(info.message.media);
+            var wasPreloaded = false;
+
+            self.letPlayerHandleAutoPlay_(info);
+            if (!protocolFunc) {
+                self.log_('loadVideo_: using MediaElement');
+                self.mediaElement_.addEventListener('stalled', self.bufferingHandler_,
+                    false);
+                self.mediaElement_.addEventListener('waiting', self.bufferingHandler_,
+                    false);
+            } else {
+                self.log_('loadVideo_: using Media Player Library');
+                // When MPL is used, buffering status should be detected by
+                // getState()['underflow]'
+                self.mediaElement_.removeEventListener('stalled', self.bufferingHandler_);
+                self.mediaElement_.removeEventListener('waiting', self.bufferingHandler_);
+
+                // If we have not preloaded or the content preloaded does not match the
+                // content that needs to be loaded, perform a full load
+                var loadErrorCallback = function () {
+                    // unload player and trigger error event on media element
+                    if (self.player_) {
+                        self.resetMediaElement_();
+                        self.mediaElement_.dispatchEvent(new Event('error'));
+                    }
+                };
+                if (!self.preloadPlayer_ || (self.preloadPlayer_.getHost &&
+                    self.preloadPlayer_.getHost().url != url)) {
+                    if (self.preloadPlayer_) {
+                        self.preloadPlayer_.unload();
+                        self.preloadPlayer_ = null;
+                    }
+                    self.log_('Regular video load');
+                    var host = new cast.player.api.Host({
+                        'url': url,
+                        'mediaElement': self.mediaElement_,
+                        'licenseUrl': licenseUrl
+                    });
+                    host.onError = loadErrorCallback;
+                    self.player_ = new cast.player.api.Player(host);
+                    self.player_.load(protocolFunc(host));
+                    self.mediaElement_.play();
+                } else {
+                    self.log_('Preloaded video load');
+                    self.player_ = self.preloadPlayer_;
+                    self.preloadPlayer_ = null;
+                    // Replace the "preload" error callback with the "load" error callback
+                    self.player_.getHost().onError = loadErrorCallback;
+                    self.player_.load();
+                    wasPreloaded = true;
+                }
+            }
+            self.loadMediaManagerInfo_(info, !!protocolFunc);
+            self.queueNextEpisode_(info.message);
+            return wasPreloaded;
+
+        }).catch(function (err) {
+            self.log_('Ticket Call Failed');
+            console.error(err);
+        });
+
     });
 };
 
