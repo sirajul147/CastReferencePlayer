@@ -59,14 +59,12 @@ body {
     background-size: contain;
     background-repeat: no-repeat;
     background-position: bottom;
-    position: absolute;
-    bottom: 45%;
-    left: 50%;
     background-image: url("assets/logo.png");
-    margin-bottom: -96px;
-    margin-left: -171px;
-    width: 350px;
-    height: 343px;
+    position: relative;
+    width: 26%;
+    height: 45%;
+    margin: 0 auto;
+    margin-top: 15%;
 }
 
 .player .placeholder-image {
@@ -103,11 +101,11 @@ body {
     background-size: contain;
     background-repeat: no-repeat;
     position: absolute;
-    top: -55vh;
+    bottom: 60vh;
     right: 0;
     background-image: url("assets/squarelogo.png");
-    width: 140px;
-    height: 140px;
+    width: 12%;
+    height: 125px;
 }
 
 .player .media-artwork {
