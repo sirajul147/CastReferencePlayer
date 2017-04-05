@@ -964,100 +964,114 @@ sampleplayer.CastPlayer.prototype.loadVideo_ = function (info) {
     this.log_('loadVideo_');
     var self = this;
     var customData = info.message.media.customData;
-    console.log('Diagnal Input Data', info);
+    console.log('Diagnal Input Data', info, customData);
 
-    this.getProgress_(customData).then(function (progress_data) {
+    fetch(customData.baseURL + 'media/videos/' + customData.mediaId).then(function (res) {
+        return res.json()
+    }).then(function (content_details) {
+        var total_duration = content_details.details.length;
+        console.log("Diagnal content id", content_details);
 
-        /**
-         * Override progress send from sender
-         */
-        if(progress_data.hasOwnProperty('success') && progress_data.success == false) {
-            console.log('Diagnal no progress data', progress_data);
-            // Anonymous user
-        } else {
-            console.log('Diagnal progress data override -> ', progress_data);
-            if(progress_data.hasOwnProperty('progress')) {
-                info.message.currentTime = progress_data.progress;
-            }
-        }
+        self.getProgress_(customData).then(function (progress_data) {
 
-        self.getTicket_(customData).then(function (ticketData) {
-
-            if('status' in ticketData) {
-                console.log('Diagnal -> ticket error:', ticketData);
-                return false;
-            }
-
-            var ticket = ticketData.ticket;
-            var licenseUrl = null;
-            if(ticketData.drm_type == "playready-dash") {
-                licenseUrl = ticketData.license_server_url + '?ticket=' + ticket + '&XSSESSION=' + customData.sessionToken + '&api=' + customData.baseURL;
-            }
-
-            var protocolFunc = null;
-            var url = info.message.media.contentId;
-            var protocolFunc = sampleplayer.getProtocolFunction_(info.message.media);
-            var wasPreloaded = false;
-
-            self.letPlayerHandleAutoPlay_(info);
-            if (!protocolFunc) {
-                self.log_('loadVideo_: using MediaElement');
-                self.mediaElement_.addEventListener('stalled', self.bufferingHandler_,
-                    false);
-                self.mediaElement_.addEventListener('waiting', self.bufferingHandler_,
-                    false);
+            /**
+             * Override progress send from sender
+             */
+            if(progress_data.hasOwnProperty('success') && progress_data.success == false) {
+                console.log('Diagnal no progress data', progress_data);
+                // Anonymous user
             } else {
-                self.log_('loadVideo_: using Media Player Library');
-                // When MPL is used, buffering status should be detected by
-                // getState()['underflow]'
-                self.mediaElement_.removeEventListener('stalled', self.bufferingHandler_);
-                self.mediaElement_.removeEventListener('waiting', self.bufferingHandler_);
-
-                // If we have not preloaded or the content preloaded does not match the
-                // content that needs to be loaded, perform a full load
-                var loadErrorCallback = function () {
-                    // unload player and trigger error event on media element
-                    if (self.player_) {
-                        self.resetMediaElement_();
-                        self.mediaElement_.dispatchEvent(new Event('error'));
+                if(progress_data.hasOwnProperty('progress')) {
+                    var _95percent = Math.round(0.95 * total_duration);
+                    if(progress_data.progress > _95percent) {
+                        info.message.currentTime = 0;
+                    } else {
+                        info.message.currentTime = progress_data.progress;
                     }
-                };
-                if (!self.preloadPlayer_ || (self.preloadPlayer_.getHost &&
-                    self.preloadPlayer_.getHost().url != url)) {
-                    if (self.preloadPlayer_) {
-                        self.preloadPlayer_.unload();
-                        self.preloadPlayer_ = null;
-                    }
-                    self.log_('Regular video load');
-                    var host = new cast.player.api.Host({
-                        'url': url,
-                        'mediaElement': self.mediaElement_,
-                        'licenseUrl': licenseUrl
-                    });
-                    host.onError = loadErrorCallback;
-                    self.player_ = new cast.player.api.Player(host);
-                    self.player_.load(protocolFunc(host));
-                    self.mediaElement_.play();
-                } else {
-                    self.log_('Preloaded video load');
-                    self.player_ = self.preloadPlayer_;
-                    self.preloadPlayer_ = null;
-                    // Replace the "preload" error callback with the "load" error callback
-                    self.player_.getHost().onError = loadErrorCallback;
-                    self.player_.load();
-                    wasPreloaded = true;
                 }
+                console.log('Diagnal progress data override -> ', info.message.currentTime);
             }
-            self.loadMediaManagerInfo_(info, !!protocolFunc);
-            self.queueNextEpisode_(info.message);
-            return wasPreloaded;
 
-        }).catch(function (err) {
-            self.log_('Ticket Call Failed');
-            console.error(err);
+            self.getTicket_(customData).then(function (ticketData) {
+
+                if('status' in ticketData) {
+                    console.log('Diagnal -> ticket error:', ticketData);
+                    return false;
+                }
+
+                var ticket = ticketData.ticket;
+                var licenseUrl = null;
+                if(ticketData.drm_type == "playready-dash") {
+                    licenseUrl = ticketData.license_server_url + '?ticket=' + ticket + '&XSSESSION=' + customData.sessionToken + '&api=' + customData.baseURL;
+                }
+
+                var protocolFunc = null;
+                var url = info.message.media.contentId;
+                var protocolFunc = sampleplayer.getProtocolFunction_(info.message.media);
+                var wasPreloaded = false;
+
+                self.letPlayerHandleAutoPlay_(info);
+                if (!protocolFunc) {
+                    self.log_('loadVideo_: using MediaElement');
+                    self.mediaElement_.addEventListener('stalled', self.bufferingHandler_,
+                        false);
+                    self.mediaElement_.addEventListener('waiting', self.bufferingHandler_,
+                        false);
+                } else {
+                    self.log_('loadVideo_: using Media Player Library');
+                    // When MPL is used, buffering status should be detected by
+                    // getState()['underflow]'
+                    self.mediaElement_.removeEventListener('stalled', self.bufferingHandler_);
+                    self.mediaElement_.removeEventListener('waiting', self.bufferingHandler_);
+
+                    // If we have not preloaded or the content preloaded does not match the
+                    // content that needs to be loaded, perform a full load
+                    var loadErrorCallback = function () {
+                        // unload player and trigger error event on media element
+                        if (self.player_) {
+                            self.resetMediaElement_();
+                            self.mediaElement_.dispatchEvent(new Event('error'));
+                        }
+                    };
+                    if (!self.preloadPlayer_ || (self.preloadPlayer_.getHost &&
+                        self.preloadPlayer_.getHost().url != url)) {
+                        if (self.preloadPlayer_) {
+                            self.preloadPlayer_.unload();
+                            self.preloadPlayer_ = null;
+                        }
+                        self.log_('Regular video load');
+                        var host = new cast.player.api.Host({
+                            'url': url,
+                            'mediaElement': self.mediaElement_,
+                            'licenseUrl': licenseUrl
+                        });
+                        host.onError = loadErrorCallback;
+                        self.player_ = new cast.player.api.Player(host);
+                        self.player_.load(protocolFunc(host));
+                        self.mediaElement_.play();
+                    } else {
+                        self.log_('Preloaded video load');
+                        self.player_ = self.preloadPlayer_;
+                        self.preloadPlayer_ = null;
+                        // Replace the "preload" error callback with the "load" error callback
+                        self.player_.getHost().onError = loadErrorCallback;
+                        self.player_.load();
+                        wasPreloaded = true;
+                    }
+                }
+                self.loadMediaManagerInfo_(info, !!protocolFunc);
+                self.queueNextEpisode_(info.message);
+                return wasPreloaded;
+
+            }).catch(function (err) {
+                self.log_('Ticket Call Failed');
+                console.error(err);
+            });
+
         });
 
     });
+
 };
 
 /**
@@ -1776,6 +1790,7 @@ sampleplayer.CastPlayer.prototype.customizedStatusCallback_ = function (mediaSta
         mediaStatus.playerState = cast.receiver.media.PlayerState.BUFFERING;
     }
 
+    console.log('Diagnal', mediaStatus.playerState, this.state_);
     return mediaStatus;
 };
 
