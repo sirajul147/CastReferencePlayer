@@ -131,6 +131,11 @@ sampleplayer.CastPlayer = function (element) {
      *
      */
     this.loadTimer_;
+    this.queuedForNextBtn = false;
+    this.reachedLastEpisode = false;
+    this.nextItem_ = null;
+    this.lastAddedItem = [];
+    this.preloadTimeout_ = null;
 
     /**
      * The id of timer to handle seeking UI.
@@ -966,11 +971,25 @@ sampleplayer.CastPlayer.prototype.loadVideo_ = function (info) {
     var customData = info.message.media.customData;
     console.log('Diagnal Input Data', info, customData);
 
-    fetch(customData.baseURL + 'media/videos/' + customData.mediaId).then(function (res) {
-        return res.json()
-    }).then(function (content_details) {
-        var total_duration = content_details.details.length;
-        console.log("Diagnal content id", content_details);
+    var getMediaStatusPromise = null;
+    if(customData.typeofItem.toLowerCase() == 'trailer') {
+        getMediaStatusPromise = Promise.resolve({
+            trailer: true
+        });
+    } else {
+        getMediaStatusPromise = fetch(customData.baseURL + 'media/videos/' + customData.mediaId).then(function (res) {
+            return res.json()
+        });
+    }
+
+    getMediaStatusPromise.then(function (content_details) {
+
+        if(content_details.hasOwnProperty('trailer') && content_details.trailer == true) {
+            var total_duration = 0;
+        } else {
+            var total_duration = content_details.details.length;
+            console.log("Diagnal content id", content_details);
+        }
 
         self.getProgress_(customData).then(function (progress_data) {
 
@@ -981,15 +1000,15 @@ sampleplayer.CastPlayer.prototype.loadVideo_ = function (info) {
                 console.log('Diagnal no progress data', progress_data);
                 // Anonymous user
             } else {
-                if(progress_data.hasOwnProperty('progress')) {
+                if(progress_data.hasOwnProperty('progress') && total_duration) {
                     var _95percent = Math.round(0.95 * total_duration);
                     if(progress_data.progress > _95percent) {
                         info.message.currentTime = 0;
                     } else {
                         info.message.currentTime = progress_data.progress;
                     }
+                    console.log('Diagnal progress data override -> ', info.message.currentTime);
                 }
-                console.log('Diagnal progress data override -> ', info.message.currentTime);
             }
 
             self.getTicket_(customData).then(function (ticketData) {
@@ -1140,6 +1159,7 @@ sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
                 console.log('Diagnal Next data', next);
                 if ('status' in next) {
                     console.log('Diagnal Reached Last Episode');
+                    self.reachedLastEpisode = true;
                     return;
                 }
 
@@ -1790,6 +1810,24 @@ sampleplayer.CastPlayer.prototype.customizedStatusCallback_ = function (mediaSta
         mediaStatus.playerState = cast.receiver.media.PlayerState.BUFFERING;
     }
 
+    var qItem = null;
+    if(this.mediaManager_) {
+        if(this.tempQ_.length && mediaStatus.playerState === cast.receiver.media.PlayerState.PLAYING && !this.queuedForNextBtn) {
+            this.queuedForNextBtn = true;
+            qItem = this.tempQ_[0];
+            delete qItem.itemId;
+            console.log('Diagnal Add Item to Q', qItem);
+            this.mediaManager_.insertQueueItems([qItem]);
+            this.lastAddedItem.push(qItem.itemId);
+        }
+        if(this.reachedLastEpisode && mediaStatus.playerState === cast.receiver.media.PlayerState.PLAYING) {
+            this.reachedLastEpisode = false;
+            console.log('Diagnal Remove Items from Q', this.lastAddedItem);
+            this.mediaManager_.removeQueueItems(this.lastAddedItem);
+            this.lastAddedItem = [];
+        }
+    }
+
     console.log('Diagnal', mediaStatus.playerState, this.state_);
     return mediaStatus;
 };
@@ -1891,11 +1929,12 @@ sampleplayer.CastPlayer.prototype.onProgress_ = function () {
     var currentTime = this.mediaElement_.currentTime;
     if((duration - currentTime) < self.preloadTime_) {
         if(this.tempQ_.length) {
-            var item = this.tempQ_.pop();
+            var item = self.tempQ_.pop();
             var diff = Math.round(duration - currentTime - 3);
             console.log('Diagnal Preload', item, diff);
+            self.nextItem_ = item;
             this.preload(item.media);
-            setTimeout(function () {
+            self.preloadTimeout_ = setTimeout(function () {
                 console.log('Diagnal -> Start next episode loading......!!!')
                 self.loadWithoutDelay(new cast.receiver.MediaManager.LoadInfo(item));
                 self.mediaManager_.setMediaInformation(item.media, true);
@@ -2015,13 +2054,23 @@ sampleplayer.CastPlayer.prototype.onCancelPreload_ = function (event) {
 sampleplayer.CastPlayer.prototype.onLoad_ = function (event) {
     this.log_('onLoad_');
     this.cancelDeferredPlay_('new media is loaded');
-    // if(!event.senderId) {
-    //     console.log('Diagnal Next click');
-    //     var item = this.tempQ_.pop();
-    //     this.loadWithoutDelay(new cast.receiver.MediaManager.LoadInfo(item));
-    //     this.mediaManager_.setMediaInformation(item.media, true);
-    //     return;
-    // }
+    this.queuedForNextBtn = false;
+    this.reachedLastEpisode = false;
+    if(!event.senderId) {
+        console.log('Diagnal Next click', this.nextItem_);
+        if(!this.nextItem_) {
+            return;
+        }
+        var item = Object.assign({}, this.nextItem_);
+        window.clearTimeout(this.preloadTimeout_);
+        this.loadWithoutDelay(new cast.receiver.MediaManager.LoadInfo(item));
+        this.mediaManager_.setMediaInformation(item.media, true);
+        this.lastAddedItem = [];
+        this.tempQ_ = [];
+        this.nextItem_ = null;
+        return;
+    }
+    this.tempQ_ = [];
     this.load(new cast.receiver.MediaManager.LoadInfo(
         /** @type {!cast.receiver.MediaManager.LoadRequestData} */ (event.data),
         event.senderId));
