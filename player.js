@@ -77,10 +77,13 @@ sampleplayer.CastPlayer = function (element) {
      * The debug setting to control receiver, MPL and player logging.
      * @private {boolean}
      */
-    this.debug_ = sampleplayer.ENABLE_DEBUG_;
+    this.debug_ = sampleplayer.DISABLE_DEBUG_;
     if (this.debug_) {
         cast.player.api.setLoggerLevel(cast.player.api.LoggerLevel.DEBUG);
         cast.receiver.logger.setLevelValue(cast.receiver.LoggerLevel.DEBUG);
+    } else {
+        cast.player.api.setLoggerLevel(cast.player.api.LoggerLevel.ERROR);
+        cast.receiver.logger.setLevelValue(cast.receiver.LoggerLevel.ERROR);
     }
 
     /**
@@ -1156,13 +1159,26 @@ sampleplayer.CastPlayer.prototype.queueNextEpisode_ =
                                 currentTime = 0;
 
                             var customData = {
-                                mediaId: next.media_id,
-                                baseURL: media.customData.baseURL,
+                                contentCategory: media.customData.contentCategory,
+                                contentId: media.customData.contentId,
                                 deviceID: media.customData.deviceID,
-                                sessionToken: media.customData.sessionToken,
-                                isSeries: true,
-                                imageList: media.customData.imageList,
+                                distributors: media.customData.distributors,
                                 episodeDetail: next.titles.default,
+                                episodeNumber: next.series[0].episode_number,
+                                fontScale: media.customData.fontScale,
+                                genres: media.customData.genres,
+                                imageList: media.customData.imageList,
+                                isKidsContent: media.customData.isKidsContent,
+                                isNews: media.customData.isNews,
+                                isSeries: media.customData.isSeries,
+                                isTrailer: media.customData.isTrailer,
+                                mediaId: next.media_id,
+                                seasonNumber: next.series[0].season_number,
+                                seriesTitle: media.customData.seriesTitle,
+                                sessionToken: media.customData.sessionToken,
+                                title: next.titles.en || next.titles.default,
+                                userLang: media.customData.userLang,
+                                baseURL: media.customData.baseURL,
                                 href: next._links.media.href,
                                 typeofItem: "Episode"
                             };
