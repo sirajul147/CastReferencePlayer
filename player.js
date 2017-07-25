@@ -996,18 +996,21 @@ sampleplayer.CastPlayer.prototype.loadVideo_ = function (info) {
             /**
              * Override progress send from sender
              */
-            if(progress_data.hasOwnProperty('success') && progress_data.success == false) {
-                console.log('Diagnal no progress data', progress_data);
-                // Anonymous user
-            } else {
-                if(progress_data.hasOwnProperty('progress') && total_duration) {
-                    var _95percent = Math.round(0.95 * total_duration);
-                    if(progress_data.progress > _95percent) {
-                        info.message.currentTime = 0;
-                    } else {
-                        info.message.currentTime = progress_data.progress;
+
+            if(info.message.hasOwnProperty('currentTime') && info.message.currentTime == 0) {
+                if(progress_data.hasOwnProperty('success') && progress_data.success == false) {
+                    console.log('Diagnal no progress data', progress_data);
+                    // Anonymous user
+                } else {
+                    if(progress_data.hasOwnProperty('progress') && total_duration) {
+                        var _95percent = Math.round(0.95 * total_duration);
+                        if(progress_data.progress > _95percent) {
+                            info.message.currentTime = 0;
+                        } else {
+                            info.message.currentTime = progress_data.progress;
+                        }
+                        console.log('Diagnal progress data override -> ', info.message.currentTime);
                     }
-                    console.log('Diagnal progress data override -> ', info.message.currentTime);
                 }
             }
 
