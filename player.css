@@ -55,16 +55,61 @@ body {
 }
 
 .player .logo {
-    display: none;
+    /*display: none;*/
+    visibility: hidden;
     background-size: contain;
     background-repeat: no-repeat;
     background-position: bottom;
     background-image: url("assets/logo.png");
     position: relative;
     width: 26%;
-    height: 45%;
+    height: 26%;
     margin: 0 auto;
     margin-top: 15%;
+}
+
+.player >.loader {
+    position: relative;
+    margin: 0 auto;
+    border-radius: 50%;
+    background-image: linear-gradient(45deg, #fe0099, #ff072c, #fe9102);
+    font-size: 11px;
+    text-indent: -99999em;
+    width: 50px;
+    height: 50px;
+    top: 15px;
+    transform-origin: top left;
+    -webkit-mask: url('/assets/mask.svg');
+    -webkit-mask-size: 50px 50px;
+}
+
+.player > .loader.hide {
+    display: none;
+}
+
+.player > .cast-ready {
+    position: relative;
+    background-image: url('assets/cast-ready.png');
+    background-repeat: no-repeat;
+    background-size: 350px;
+    height: 50px;
+    width: 350px;
+    top: 15px;
+    display: inline-block;
+    left: 50%;
+    margin-left: -175px;
+}
+
+.player > .cast-ready.hide {
+    display: none;
+}
+
+.player > .cast-ready > .cast-image {
+    display: inline-block;
+}
+
+.player > .cast-ready > .cast-text{
+    display: inline-block;
 }
 
 .player .placeholder-image {
@@ -717,10 +762,11 @@ body {
 
 .player[state="idle"] .logo {
     display: block;
+    visibility: visible;
 }
 
 .player[state="idle"] .spinner {
-    display: none;
+    /*display: none;*/
 }
 
 /* ------------------------------------------------- */

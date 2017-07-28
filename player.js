@@ -273,6 +273,8 @@ sampleplayer.CastPlayer = function (element) {
      */
     this.receiverManager_ = cast.receiver.CastReceiverManager.getInstance();
     this.receiverManager_.onReady = this.onReady_.bind(this);
+    this.receiverManager_.onSenderConnected =
+        this.onSenderConnected_.bind(this);
     this.receiverManager_.onSenderDisconnected =
         this.onSenderDisconnected_.bind(this);
     this.receiverManager_.onVisibilityChanged =
@@ -1716,6 +1718,31 @@ sampleplayer.CastPlayer.prototype.onSenderDisconnected_ = function (event) {
         cast.receiver.system.DisconnectReason.REQUESTED_BY_SENDER) {
         this.receiverManager_.stop();
     }
+};
+
+/**
+ * Called when a sender connects to the app.
+ *
+ * @param {cast.receiver.CastReceiverManager.SenderConnectedEvent} event
+ * @private
+ */
+sampleplayer.CastPlayer.prototype.onSenderConnected_ = function (event) {
+    var loaderComponent = document.querySelector('.player > .loader');
+    var castReadyComponent = document.querySelector('.player > .cast-ready');
+    if(loaderComponent) {
+        loaderComponent.classList.add('hide');
+    }
+    if(castReadyComponent) {
+        castReadyComponent.classList.remove('hide');
+    }
+    this.log_('onSenderConnected');
+    // // When the last or only sender is connected to a receiver,
+    // // tapping Disconnect stops the app running on the receiver.
+    // if (this.receiverManager_.getSenders().length === 0 &&
+    //     event.reason ===
+    //     cast.receiver.system.DisconnectReason.REQUESTED_BY_SENDER) {
+    //     this.receiverManager_.stop();
+    // }
 };
 
 
