@@ -65,11 +65,12 @@ body {
     width: 26%;
     height: 26%;
     margin: 0 auto;
-    margin-top: 15%;
+    margin-top: 18%;
 }
 
 .player >.loader {
     position: relative;
+    display: block;
     margin: 0 auto;
     border-radius: 50%;
     background-image: linear-gradient(45deg, #fe0099, #ff072c, #fe9102);
@@ -77,7 +78,7 @@ body {
     text-indent: -99999em;
     width: 50px;
     height: 50px;
-    top: 15px;
+    top: 50px;
     transform-origin: top left;
     -webkit-mask: url('/assets/mask.svg');
     -webkit-mask-size: 50px 50px;
@@ -89,15 +90,15 @@ body {
 
 .player > .cast-ready {
     position: relative;
-    background-image: url('assets/cast-ready.png');
+    background-image: url(assets/cast-ready.png);
     background-repeat: no-repeat;
-    background-size: 350px;
+    background-size: 250px;
     height: 50px;
-    width: 350px;
-    top: 15px;
+    width: 250px;
+    top: 50px;
     display: inline-block;
     left: 50%;
-    margin-left: -175px;
+    margin-left: -125px;
 }
 
 .player > .cast-ready.hide {
@@ -769,6 +770,14 @@ body {
     /*display: none;*/
 }
 
+.player[state="idle"] > .cast-ready {
+    display: inline-block;
+}
+
+.player[state="idle"] > .loader {
+    display: none;
+}
+
 /* ------------------------------------------------- */
 /* Player - Done                                     */
 /* ------------------------------------------------- */
@@ -778,7 +787,20 @@ body {
 }
 
 .player[state="done"] {
-    background-image: url('assets/done.png');
+    background-image: url('assets/background.png');
+}
+
+.player[state="done"] > .logo {
+    display: block;
+    visibility: visible;
+}
+
+.player[state="done"] > .cast-ready {
+    display: none;
+}
+
+.player[state="done"] > .loader {
+    display: block;
 }
 
 /* Coming Up Next */
