@@ -216,7 +216,7 @@ sampleplayer.CastPlayer = function (element) {
      * Whether player app should handle autoplay behavior.
      * @private {boolean}
      */
-    this.playerAutoPlay_ = false;
+    this.playerAutoPlay_ = true;
 
     /**
      * Whether player app should display the preview mode UI.
@@ -718,14 +718,14 @@ sampleplayer.CastPlayer.prototype.load = function (info) {
                             // Make sure media info is displayed long enough before playback
                             // starts.
                             self.deferPlay_(sampleplayer.MEDIA_INFO_DURATION_);
-                            self.playerAutoPlay_ = false;
+                            // self.playerAutoPlay_ = false;
                         }
                     });
                 }
             });
         }
 
-    }, 3000);
+    }, 1000);
 };
 
 
@@ -2009,7 +2009,7 @@ sampleplayer.CastPlayer.prototype.customizedStatusCallback_ = function (mediaSta
 
     var qItem = null;
     if(this.mediaManager_) {
-        if(this.tempQ_.length && mediaStatus.playerState === cast.receiver.media.PlayerState.PLAYING) {
+        if(this.tempQ_.length && (mediaStatus.playerState === cast.receiver.media.PlayerState.PLAYING)) {
             var mediaQueue = this.mediaManager_.getMediaQueue();
 
             console.log("Media Queue", mediaQueue);
@@ -2306,7 +2306,9 @@ sampleplayer.CastPlayer.prototype.onLoad_ = function (event) {
     } else {
         this.queueMediaList = [];
     }
-    this.queueMediaList.push(event.data.media.customData.mediaId);
+    if(this.queueMediaList.indexOf(event.data.media.customData.mediaId) === -1) {
+        this.queueMediaList.push(event.data.media.customData.mediaId);
+    }
     this.tempQ_ = [];
     this.load(new cast.receiver.MediaManager.LoadInfo(
         /** @type {!cast.receiver.MediaManager.LoadRequestData} */ (event.data),
