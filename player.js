@@ -342,6 +342,12 @@ sampleplayer.CastPlayer = function (element) {
         this.customizedStatusCallback_.bind(this);
 
     this.mediaManager_.onPreload = this.onPreload_.bind(this);
+    // this.mediaManager_.onQueueInsert = this.onQueueInsert_.bind(this);
+    // this.mediaManager_.onQueueLoad = this.onQueueLoad_.bind(this);
+    // this.mediaManager_.onQueueRemove = this.onQueueRemove_.bind(this);
+    // this.mediaManager_.onQueueEnded = this.onQueueEnded_.bind(this);
+    // this.mediaManager_.onQueueReorder = this.onQueueReorder_.bind(this);
+    // this.mediaManager_.onQueueUpdate = this.onQueueUpdate_.bind(this);
     this.mediaManager_.onCancelPreload = this.onCancelPreload_.bind(this);
 
     /**
@@ -351,6 +357,7 @@ sampleplayer.CastPlayer = function (element) {
      */
     this.tempQ_ = [];
     this.queueMediaList = [];
+    this.preloadDisplayed = false;
     this.preloadTime_ = 10;
 };
 
@@ -1027,8 +1034,10 @@ sampleplayer.CastPlayer.prototype.loadVideo_ = function (info) {
 
                 var ticket = ticketData.ticket;
                 var licenseUrl = null;
+                var protectionSystem = null;
                 if(ticketData.drm_type == "playready-dash") {
                     licenseUrl = ticketData.license_server_url + '?ticket=' + ticket + '&XSSESSION=' + customData.sessionToken + '&api=' + customData.baseURL;
+                    protectionSystem = cast.player.api.ContentProtection.PLAYREADY;
                 }
 
                 var protocolFunc = null;
@@ -1069,7 +1078,8 @@ sampleplayer.CastPlayer.prototype.loadVideo_ = function (info) {
                         var host = new cast.player.api.Host({
                             'url': url,
                             'mediaElement': self.mediaElement_,
-                            'licenseUrl': licenseUrl
+                            'licenseUrl': licenseUrl,
+                            'protectionSystem': protectionSystem
                         });
                         host.onError = loadErrorCallback;
                         self.player_ = new cast.player.api.Player(host);
@@ -1124,76 +1134,76 @@ sampleplayer.CastPlayer.prototype.checkMediaAccess_ = function (mediaId, media) 
     });
 };
 
-sampleplayer.CastPlayer.prototype.queuePrevEpisode_ = function (message) {
-
+sampleplayer.CastPlayer.prototype.queueEpisode_ = function (message, queuePosition) {
     var self = this;
     var media = message.media;
-    // console.log('Diagnal queue Item', media);
 
-    // Clear current queue
-    self.tempQ_ = [];
-
-    if(media.customData.typeofItem.toLowerCase() == 'trailer') {
+    if (media.customData.typeofItem.toLowerCase() == 'trailer') {
         console.log('Diagnal -> Playing Preview/Trailer, skip queuing');
         return;
     }
 
     // Queue episode only if series
-    fetch(media.customData.baseURL + 'media/videos/' + media.customData.mediaId).then(function (res) {
+    return fetch(media.customData.baseURL + 'media/videos/' + media.customData.mediaId).then(function (res) {
         return res.json()
     }).then(function (content) {
-        if(!content.series.length)
+        if (!content.series.length)
             return;
 
         var tags = content.tags;
         var next = 10;
         tags.forEach(function (tag) {
-            if(tag.indexOf('next') > -1) {
+            if (tag.indexOf('next') > -1) {
                 var parts = tag.split('-');
                 next = parts[1];
             }
-        })
+        });
         self.preloadTime_ = next;
-        console.log('Diagnal -> Preload Prev in -> ', self.preloadTime_);
+        console.log('Diagnal -> Preload next in -> ', self.preloadTime_);
 
         var series_id = content.series[0].id;
         var season_id = content.series[0].seasons[0].id;
         var episode_id = content.series[0].seasons[0].episodes[0].id;
-        fetch(media.customData.baseURL + 'media/series/' + series_id + '/seasons/' + season_id + '/episodes/' + episode_id + '/prev').then(function (res) {
+        var apiEndPoint = (queuePosition === 'prev') ? 'prev' : 'next';
+        return fetch(media.customData.baseURL + 'media/series/' + series_id + '/seasons/' + season_id + '/episodes/' + episode_id + '/' + apiEndPoint).then(function (res) {
             return res.json();
-        }).then(function (prev) {
+        }).then(function (item) {
 
-            console.log('Diagnal Prev data', prev);
-            if ('status' in prev) {
-                console.log('Diagnal Reached First Episode');
-                self.reachedFirstEpisode = true;
-                return;
+            console.log('Diagnal data: ' + queuePosition, item);
+            if ('status' in item) {
+                console.log('Diagnal Reached Last/First Episode');
+                if(queuePosition === 'prev') {
+                    self.reachedFirstEpisode = true;
+                } else {
+                    self.reachedLastEpisode = true;
+                }
+                return true;
             }
 
-            if(self.queueMediaList.indexOf(prev.media_id) !== -1) {
+            if (self.queueMediaList.indexOf(item.media_id) !== -1) {
                 console.log('Diagnal -> Media already queued, skip queuing');
-                return;
+                return true;
             }
 
-            self.checkMediaAccess_(prev.media_id, media).then(function (res) {
+            return self.checkMediaAccess_(item.media_id, media).then(function (res) {
                 console.log('Diagnal Media Access', res);
-                if(res.status == 'anonymous') {
-                    if (prev.tags.indexOf("anonymous-access") == -1) {
+                if (res.status == 'anonymous') {
+                    if (item.tags.indexOf("anonymous-access") == -1) {
                         console.log('Diagnal -> Media access missing for anonymous, skip queue');
-                        return;
+                        return true;
                     }
                 } else if (res.status != "ok") {
                     console.log('Diagnal -> Media access false, skip queue');
-                    return;
+                    return true;
                 }
 
                 var isKidsContent = false;
-                if(prev.tags && prev.tags.indexOf('kids-content') !== -1) {
+                if (item.tags && item.tags.indexOf('kids-content') !== -1) {
                     isKidsContent = true;
                 }
 
                 var customData = {
-                    mediaId: prev.media_id,
+                    mediaId: item.media_id,
                     baseURL: media.customData.baseURL,
                     deviceID: media.customData.deviceID,
                     sessionToken: media.customData.sessionToken,
@@ -1201,13 +1211,13 @@ sampleplayer.CastPlayer.prototype.queuePrevEpisode_ = function (message) {
                     isKidsContent: isKidsContent,
                     currentTime: 0,
                     imageList: media.customData.imageList,
-                    episodeDetail: 'S' + self.zeroPad_(prev.series[0].season_number, 2) + ' E' + self.zeroPad_(prev.series[0].episode_number, 2),
-                    episodeNumber: prev.series[0].episode_number,
-                    href: prev._links.media.href,
+                    episodeDetail: 'S' + self.zeroPad_(item.series[0].season_number, 2) + ' E' + self.zeroPad_(item.series[0].episode_number, 2),
+                    episodeNumber: item.series[0].episode_number,
+                    href: item._links.media.href,
                     typeofItem: "episode"
                 };
 
-                var streams = prev.streams.web, contentId = null;
+                var streams = item.streams.web, contentId = null;
                 streams.forEach(function (stream) {
                     if (!('drm' in stream)) {
                         return true;
@@ -1218,7 +1228,7 @@ sampleplayer.CastPlayer.prototype.queuePrevEpisode_ = function (message) {
                     }
                 });
 
-                if(!contentId) {
+                if (!contentId) {
                     streams.forEach(function (stream) {
                         if (stream.type == 'mpd') {
                             customData.streamID = stream.id;
@@ -1232,10 +1242,10 @@ sampleplayer.CastPlayer.prototype.queuePrevEpisode_ = function (message) {
                 imageList.forEach(function (img) {
                     for (var type in img) {
                         var format = img[type];
-                        prev.images.forEach(function (prev_img) {
-                            if (prev_img.type == type) {
+                        item.images.forEach(function (item_img) {
+                            if (item_img.type == type) {
                                 images.push({
-                                    url: prev_img.format[format].source
+                                    url: item_img.format[format].source
                                 });
                             }
                         });
@@ -1244,7 +1254,8 @@ sampleplayer.CastPlayer.prototype.queuePrevEpisode_ = function (message) {
 
                 var queueItem = new cast.receiver.media.QueueItem();
                 queueItem.autoplay = true;
-                queueItem.playbackDuration = Number(prev.details.length);
+                queueItem.playbackDuration = Number(item.details.length);
+                queueItem.preloadTime = 10;
                 queueItem.customData = customData;
 
                 var duration = content.details.length;
@@ -1252,21 +1263,22 @@ sampleplayer.CastPlayer.prototype.queuePrevEpisode_ = function (message) {
                 queueItem.media = {
                     contentId: contentId,
                     contentType: "application/dash+xml",
-                    duration: Number(prev.details.length),
+                    duration: Number(item.details.length),
                     streamType: cast.receiver.media.StreamType.BUFFERED,
                     currentTime: 0,
                     metadata: {
                         images: images,
                         metadataType: 1,
-                        title: prev.titles.default,
-                        subtitle: prev.medium_descriptions.default || prev.long_descriptions.default
+                        title: item.titles.default,
+                        subtitle: item.medium_descriptions.default || item.long_descriptions.default
                     },
                     customData: customData
                 };
 
-                self.tempQ_.unshift(queueItem);
-                self.queueMediaList.push(prev.media_id);
-                console.log('Diagnal Temp Q ->', self.tempQ_);
+                self.tempQ_.push(queueItem);
+                self.queueMediaList.push(item.media_id);
+                // console.log('Diagnal Temp Q ->', self.tempQ_);
+                return true;
 
             });
         });
@@ -1276,158 +1288,79 @@ sampleplayer.CastPlayer.prototype.queuePrevEpisode_ = function (message) {
     });
 };
 
+sampleplayer.CastPlayer.prototype.queuePrevEpisode_ = function (message) {
+    var self = this;
+    /**
+     * tempQ_ will contain at maximum 2 items, for previous and next items.
+     * It will be cleared once queued into google cast queue.
+     * Hence clear each time queuePrevEpisode is invoked.
+     **/
+    self.tempQ_ = [];
+    this.queueEpisode_(message, 'prev').then(function (response) {
+        self.queueToCastDevice_();
+    });
+
+};
+
 sampleplayer.CastPlayer.prototype.queueNextEpisode_ = function (message) {
+    var self = this;
+    this.queueEpisode_(message, 'next').then(function (response) {
+        self.queueToCastDevice_();
+    });
+};
 
-        var self = this;
-        var media = message.media;
-        // console.log('Diagnal queue Item', media);
+sampleplayer.CastPlayer.prototype.queueToCastDevice_ = function () {
+    var qItem = null;
+    if(this.mediaManager_) {
+        if(this.tempQ_.length
+            /*&& (mediaStatus.playerState === cast.receiver.media.PlayerState.PLAYING)*/
+        ) {
+            var mediaQueue = this.mediaManager_.getMediaQueue();
 
-        // Clear current queue
-        //Clearing to be done in queuePrevEpisode
-        // self.tempQ_ = [];
+            console.log("Media Queue", mediaQueue);
 
-        if(media.customData.typeofItem.toLowerCase() == 'trailer') {
-            console.log('Diagnal -> Playing Preview/Trailer, skip queuing');
-            return;
+            //TODO: is it needed to pop ?
+            qItem = this.tempQ_.shift();
+            var currentItem = null;
+            var currentItemId = null;
+            if(mediaQueue) {
+                currentItem = mediaQueue.getCurrentItem();
+                currentItemId = mediaQueue.getCurrentItemId();
+            }
+            if(currentItem && currentItem.media.customData.episodeNumber) {
+                var currentEpisode = currentItem.media.customData.episodeNumber;
+                var queueEpisode = qItem.media.customData.episodeNumber;
+                if(currentEpisode > queueEpisode) {
+                    if (!this.queuedForPrevBtn) {
+                        this.queuedForPrevBtn = true;
+                        // qItem = this.tempQ_[0];
+                        delete qItem.itemId;
+                        console.log('Diagnal Add Item to Q', qItem);
+                        //TODO: insert before currentItem
+                        this.mediaManager_.insertQueueItems([qItem], currentItemId);
+                        //TODO: is this needed??
+                        // this.lastAddedItem.push(qItem.itemId);
+                    }
+                } else if(currentEpisode < queueEpisode){
+                    if(!this.queuedForNextBtn) {
+                        this.queuedForNextBtn = true;
+                        // qItem = this.tempQ_[0];
+                        delete qItem.itemId;
+                        console.log('Diagnal Add Item to Q', qItem);
+                        this.mediaManager_.insertQueueItems([qItem]);
+                        this.lastAddedItem.push(qItem.itemId);
+                    }
+                }
+            }
         }
-
-        // Queue episode only if series
-        fetch(media.customData.baseURL + 'media/videos/' + media.customData.mediaId).then(function (res) {
-            return res.json()
-        }).then(function (content) {
-            if(!content.series.length)
-                return;
-
-            var tags = content.tags;
-            var next = 10;
-            tags.forEach(function (tag) {
-                if(tag.indexOf('next') > -1) {
-                    var parts = tag.split('-');
-                    next = parts[1];
-                }
-            })
-            self.preloadTime_ = next;
-            console.log('Diagnal -> Preload next in -> ', self.preloadTime_);
-
-            var series_id = content.series[0].id;
-            var season_id = content.series[0].seasons[0].id;
-            var episode_id = content.series[0].seasons[0].episodes[0].id;
-            fetch(media.customData.baseURL + 'media/series/' + series_id + '/seasons/' + season_id + '/episodes/' + episode_id + '/next').then(function (res) {
-                return res.json();
-            }).then(function (next) {
-
-                console.log('Diagnal Next data', next);
-                if ('status' in next) {
-                    console.log('Diagnal Reached Last Episode');
-                    self.reachedLastEpisode = true;
-                    return;
-                }
-
-                if(self.queueMediaList.indexOf(next.media_id) !== -1) {
-                    console.log('Diagnal -> Media already queued, skip queuing');
-                    return;
-                }
-
-                self.checkMediaAccess_(next.media_id, media).then(function (res) {
-                    console.log('Diagnal Media Access', res);
-                    if(res.status == 'anonymous') {
-                        if (next.tags.indexOf("anonymous-access") == -1) {
-                            console.log('Diagnal -> Media access missing for anonymous, skip queue');
-                            return;
-                        }
-                    } else if (res.status != "ok") {
-                        console.log('Diagnal -> Media access false, skip queue');
-                        return;
-                    }
-
-                    var isKidsContent = false;
-                    if(next.tags && next.tags.indexOf('kids-content') !== -1) {
-                        isKidsContent = true;
-                    }
-
-                    var customData = {
-                        mediaId: next.media_id,
-                        baseURL: media.customData.baseURL,
-                        deviceID: media.customData.deviceID,
-                        sessionToken: media.customData.sessionToken,
-                        isSeries: true,
-                        isKidsContent: isKidsContent,
-                        currentTime: 0,
-                        imageList: media.customData.imageList,
-                        episodeDetail: 'S' + self.zeroPad_(next.series[0].season_number, 2) + ' E' + self.zeroPad_(next.series[0].episode_number, 2),
-                        episodeNumber: next.series[0].episode_number,
-                        href: next._links.media.href,
-                        typeofItem: "episode"
-                    };
-
-                    var streams = next.streams.web, contentId = null;
-                    streams.forEach(function (stream) {
-                        if (!('drm' in stream)) {
-                            return true;
-                        }
-                        if (stream.drm.type == 'playready-dash') {
-                            customData.streamID = stream.id;
-                            contentId = stream.src;
-                        }
-                    });
-
-                    if(!contentId) {
-                        streams.forEach(function (stream) {
-                            if (stream.type == 'mpd') {
-                                customData.streamID = stream.id;
-                                contentId = stream.src;
-                            }
-                        });
-                    }
-
-                    var images = [];
-                    var imageList = media.customData.imageList;
-                    imageList.forEach(function (img) {
-                        for (var type in img) {
-                            var format = img[type];
-                            next.images.forEach(function (next_img) {
-                                if (next_img.type == type) {
-                                    images.push({
-                                        url: next_img.format[format].source
-                                    });
-                                }
-                            });
-                        }
-                    });
-
-                    var queueItem = new cast.receiver.media.QueueItem();
-                    queueItem.autoplay = true;
-                    queueItem.playbackDuration = Number(next.details.length);
-                    queueItem.customData = customData;
-
-                    var duration = content.details.length;
-
-                    queueItem.media = {
-                        contentId: contentId,
-                        contentType: "application/dash+xml",
-                        duration: Number(next.details.length),
-                        streamType: cast.receiver.media.StreamType.BUFFERED,
-                        currentTime: 0,
-                        metadata: {
-                            images: images,
-                            metadataType: 1,
-                            title: next.titles.default,
-                            subtitle: next.medium_descriptions.default || next.long_descriptions.default
-                        },
-                        customData: customData
-                    };
-
-                    self.tempQ_.push(queueItem);
-                    self.queueMediaList.push(next.media_id);
-                    // console.log('Diagnal Temp Q ->', self.tempQ_);
-
-                });
-            });
-        }).catch(function (err) {
-            console.log('Diagnal -> Episode Parse Error', err);
-            return true;
-        });
-    };
+        // if(this.reachedLastEpisode && mediaStatus.playerState === cast.receiver.media.PlayerState.PLAYING) {
+        //     this.reachedLastEpisode = false;
+        //     console.log('Diagnal Remove Items from Q', this.lastAddedItem);
+        //     this.mediaManager_.removeQueueItems(this.lastAddedItem);
+        //     this.lastAddedItem = [];
+        // }
+    }
+};
 
 /**
  * Padding with zero
@@ -2007,54 +1940,54 @@ sampleplayer.CastPlayer.prototype.customizedStatusCallback_ = function (mediaSta
         mediaStatus.playerState = cast.receiver.media.PlayerState.BUFFERING;
     }
 
-    var qItem = null;
-    if(this.mediaManager_) {
-        if(this.tempQ_.length && (mediaStatus.playerState === cast.receiver.media.PlayerState.PLAYING)) {
-            var mediaQueue = this.mediaManager_.getMediaQueue();
-
-            console.log("Media Queue", mediaQueue);
-
-            //TODO: is it needed to pop ?
-            qItem = this.tempQ_.shift();
-            var currentItem = null;
-            var currentItemId = null;
-            if(mediaQueue) {
-                currentItem = mediaQueue.getCurrentItem();
-                currentItemId = mediaQueue.getCurrentItemId();
-            }
-            if(currentItem && currentItem.media.customData.episodeNumber) {
-                var currentEpisode = currentItem.media.customData.episodeNumber;
-                var queueEpisode = qItem.media.customData.episodeNumber;
-                if(currentEpisode > queueEpisode) {
-                    if (!this.queuedForPrevBtn) {
-                        this.queuedForPrevBtn = true;
-                        // qItem = this.tempQ_[0];
-                        delete qItem.itemId;
-                        console.log('Diagnal Add Item to Q', qItem);
-                        //TODO: insert before currentItem
-                        this.mediaManager_.insertQueueItems([qItem], currentItemId);
-                        //TODO: is this needed??
-                        // this.lastAddedItem.push(qItem.itemId);
-                    }
-                } else if(currentEpisode < queueEpisode){
-                    if(!this.queuedForNextBtn) {
-                        this.queuedForNextBtn = true;
-                        // qItem = this.tempQ_[0];
-                        delete qItem.itemId;
-                        console.log('Diagnal Add Item to Q', qItem);
-                        this.mediaManager_.insertQueueItems([qItem]);
-                        this.lastAddedItem.push(qItem.itemId);
-                    }
-                }
-            }
-        }
-        // if(this.reachedLastEpisode && mediaStatus.playerState === cast.receiver.media.PlayerState.PLAYING) {
-        //     this.reachedLastEpisode = false;
-        //     console.log('Diagnal Remove Items from Q', this.lastAddedItem);
-        //     this.mediaManager_.removeQueueItems(this.lastAddedItem);
-        //     this.lastAddedItem = [];
-        // }
-    }
+    // var qItem = null;
+    // if(this.mediaManager_) {
+    //     if(this.tempQ_.length && (mediaStatus.playerState === cast.receiver.media.PlayerState.PLAYING)) {
+    //         var mediaQueue = this.mediaManager_.getMediaQueue();
+    //
+    //         console.log("Media Queue", mediaQueue);
+    //
+    //         //TODO: is it needed to pop ?
+    //         qItem = this.tempQ_.shift();
+    //         var currentItem = null;
+    //         var currentItemId = null;
+    //         if(mediaQueue) {
+    //             currentItem = mediaQueue.getCurrentItem();
+    //             currentItemId = mediaQueue.getCurrentItemId();
+    //         }
+    //         if(currentItem && currentItem.media.customData.episodeNumber) {
+    //             var currentEpisode = currentItem.media.customData.episodeNumber;
+    //             var queueEpisode = qItem.media.customData.episodeNumber;
+    //             if(currentEpisode > queueEpisode) {
+    //                 if (!this.queuedForPrevBtn) {
+    //                     this.queuedForPrevBtn = true;
+    //                     // qItem = this.tempQ_[0];
+    //                     delete qItem.itemId;
+    //                     console.log('Diagnal Add Item to Q', qItem);
+    //                     //TODO: insert before currentItem
+    //                     this.mediaManager_.insertQueueItems([qItem], currentItemId);
+    //                     //TODO: is this needed??
+    //                     // this.lastAddedItem.push(qItem.itemId);
+    //                 }
+    //             } else if(currentEpisode < queueEpisode){
+    //                 if(!this.queuedForNextBtn) {
+    //                     this.queuedForNextBtn = true;
+    //                     // qItem = this.tempQ_[0];
+    //                     delete qItem.itemId;
+    //                     console.log('Diagnal Add Item to Q', qItem);
+    //                     this.mediaManager_.insertQueueItems([qItem]);
+    //                     this.lastAddedItem.push(qItem.itemId);
+    //                 }
+    //             }
+    //         }
+    //     }
+    //     // if(this.reachedLastEpisode && mediaStatus.playerState === cast.receiver.media.PlayerState.PLAYING) {
+    //     //     this.reachedLastEpisode = false;
+    //     //     console.log('Diagnal Remove Items from Q', this.lastAddedItem);
+    //     //     this.mediaManager_.removeQueueItems(this.lastAddedItem);
+    //     //     this.lastAddedItem = [];
+    //     // }
+    // }
 
     console.log('Diagnal', mediaStatus.playerState, this.state_);
     return mediaStatus;
@@ -2156,18 +2089,35 @@ sampleplayer.CastPlayer.prototype.onProgress_ = function () {
     var duration = this.mediaElement_.duration;
     var currentTime = this.mediaElement_.currentTime;
     if((duration - currentTime) < self.preloadTime_) {
-        if(this.tempQ_.length) {
-            var item = self.tempQ_.pop();
-            var diff = Math.round(duration - currentTime - 3);
-            console.log('Diagnal Preload', item, diff);
-            self.nextItem_ = item;
-            this.preload(item.media);
-            self.preloadTimeout_ = setTimeout(function () {
-                console.log('Diagnal -> Start next episode loading......!!!')
-                self.loadWithoutDelay(new cast.receiver.MediaManager.LoadInfo(item));
-                self.mediaManager_.setMediaInformation(item.media, true);
-            }, diff * 1000);
-        }
+        // if(self.preloadDisplayed) {
+        //     return;
+        // }
+        // self.preloadDisplayed = true;
+        // var mediaQueue = this.mediaManager_.getMediaQueue();
+        // var mediaQueueItems = mediaQueue.getItems();
+        // var currentItemId = mediaQueue.getCurrentItemId();
+        // var nextItem = null;
+        //
+        // if(mediaQueueItems.length) {
+        //     for(var i = 0; i < mediaQueueItems.length; i++) {
+        //         if(mediaQueueItems[i].itemId === currentItemId) {
+        //             nextItem = mediaQueueItems[i + 1];
+        //             break;
+        //         }
+        //     }
+        // }
+        //
+        // if(nextItem) {
+        //     var diff = Math.round(duration - currentTime - 3);
+        //     console.log('Diagnal Preload', nextItem, diff);
+        //     self.nextItem_ = nextItem;
+        //     this.preload(nextItem.media);
+        //     self.preloadTimeout_ = setTimeout(function () {
+        //         console.log('Diagnal -> Start next episode loading......!!!')
+        //         self.loadWithoutDelay(new cast.receiver.MediaManager.LoadInfo(nextItem));
+        //         self.mediaManager_.setMediaInformation(nextItem.media, true);
+        //     }, diff * 1000);
+        // }
     }
 };
 
@@ -2256,6 +2206,26 @@ sampleplayer.CastPlayer.prototype.onPreload_ = function (event) {
     return this.preload(loadRequestData.media);
 };
 
+/*TODO: Remove if not needed*/
+sampleplayer.CastPlayer.prototype.onQueueInsert_ = function (event) {
+    this.log_('onPreload_');
+};
+sampleplayer.CastPlayer.prototype.onQueueLoad_ = function (event) {
+    this.log_('onPreload_');
+};
+sampleplayer.CastPlayer.prototype.onQueueRemove_ = function (event) {
+    this.log_('onPreload_');
+};
+sampleplayer.CastPlayer.prototype.onQueueEnded_ = function (event) {
+    this.log_('onPreload_');
+};
+sampleplayer.CastPlayer.prototype.onQueueReorder_ = function (event) {
+    this.log_('onPreload_');
+};
+sampleplayer.CastPlayer.prototype.onQueueUpdate_ = function (event) {
+    this.log_('onPreload_');
+};
+
 
 /**
  * Called when we receive a CANCEL_PRELOAD message.
@@ -2281,6 +2251,8 @@ sampleplayer.CastPlayer.prototype.onCancelPreload_ = function (event) {
  */
 sampleplayer.CastPlayer.prototype.onLoad_ = function (event) {
     this.log_('onLoad_');
+    this.tempQ_ = [];
+    this.preloadDisplayed = false;
     var castReadyComponent = document.querySelector('.player > .cast-ready');
     if(castReadyComponent) {
         castReadyComponent.classList.add('hide');
@@ -2309,7 +2281,6 @@ sampleplayer.CastPlayer.prototype.onLoad_ = function (event) {
     if(this.queueMediaList.indexOf(event.data.media.customData.mediaId) === -1) {
         this.queueMediaList.push(event.data.media.customData.mediaId);
     }
-    this.tempQ_ = [];
     this.load(new cast.receiver.MediaManager.LoadInfo(
         /** @type {!cast.receiver.MediaManager.LoadRequestData} */ (event.data),
         event.senderId));
