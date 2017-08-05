@@ -343,9 +343,9 @@ sampleplayer.CastPlayer = function (element) {
 
     this.mediaManager_.onPreload = this.onPreload_.bind(this);
     // this.mediaManager_.onQueueInsert = this.onQueueInsert_.bind(this);
-    // this.mediaManager_.onQueueLoad = this.onQueueLoad_.bind(this);
-    // this.mediaManager_.onQueueRemove = this.onQueueRemove_.bind(this);
-    // this.mediaManager_.onQueueEnded = this.onQueueEnded_.bind(this);
+    this.mediaManager_.onQueueLoad = this.onQueueLoad_.bind(this);
+    this.mediaManager_.onQueueRemove = this.onQueueRemove_.bind(this);
+    this.mediaManager_.onQueueEnded = this.onQueueEnded_.bind(this);
     // this.mediaManager_.onQueueReorder = this.onQueueReorder_.bind(this);
     // this.mediaManager_.onQueueUpdate = this.onQueueUpdate_.bind(this);
     this.mediaManager_.onCancelPreload = this.onCancelPreload_.bind(this);
@@ -1070,6 +1070,7 @@ sampleplayer.CastPlayer.prototype.loadVideo_ = function (info) {
                     };
                     if (!self.preloadPlayer_ || (self.preloadPlayer_.getHost &&
                         self.preloadPlayer_.getHost().url != url)) {
+                        // console.log('_playVideo: Regular');
                         if (self.preloadPlayer_) {
                             self.preloadPlayer_.unload();
                             self.preloadPlayer_ = null;
@@ -1086,6 +1087,7 @@ sampleplayer.CastPlayer.prototype.loadVideo_ = function (info) {
                         self.player_.load(protocolFunc(host));
                         self.mediaElement_.play();
                     } else {
+                        // console.log('_playVideo: Preload');
                         self.log_('Preloaded video load');
                         self.player_ = self.preloadPlayer_;
                         self.preloadPlayer_ = null;
@@ -1254,16 +1256,17 @@ sampleplayer.CastPlayer.prototype.queueEpisode_ = function (message, queuePositi
 
                 var queueItem = new cast.receiver.media.QueueItem();
                 queueItem.autoplay = true;
-                queueItem.playbackDuration = Number(item.details.length);
+                // queueItem.playbackDuration = Number(item.details.length);
                 queueItem.preloadTime = 10;
                 queueItem.customData = customData;
 
-                var duration = content.details.length;
+                // var duration = content.details.length;
 
                 queueItem.media = {
                     contentId: contentId,
                     contentType: "application/dash+xml",
-                    duration: Number(item.details.length),
+                    // duration: Number(item.details.length),
+                    // duration: queueItem.playbackDuration,
                     streamType: cast.receiver.media.StreamType.BUFFERED,
                     currentTime: 0,
                     metadata: {
@@ -1836,13 +1839,6 @@ sampleplayer.CastPlayer.prototype.onSenderConnected_ = function (event) {
         castReadyComponent.classList.remove('hide');
     }
     this.log_('onSenderConnected');
-    // // When the last or only sender is connected to a receiver,
-    // // tapping Disconnect stops the app running on the receiver.
-    // if (this.receiverManager_.getSenders().length === 0 &&
-    //     event.reason ===
-    //     cast.receiver.system.DisconnectReason.REQUESTED_BY_SENDER) {
-    //     this.receiverManager_.stop();
-    // }
 };
 
 
@@ -2208,22 +2204,28 @@ sampleplayer.CastPlayer.prototype.onPreload_ = function (event) {
 
 /*TODO: Remove if not needed*/
 sampleplayer.CastPlayer.prototype.onQueueInsert_ = function (event) {
-    this.log_('onPreload_');
+    this.log_('onQueueInsert_');
 };
 sampleplayer.CastPlayer.prototype.onQueueLoad_ = function (event) {
-    this.log_('onPreload_');
+    this.log_('onQueueLoad_');
+    // console.log('onQueueLoad_');
 };
 sampleplayer.CastPlayer.prototype.onQueueRemove_ = function (event) {
-    this.log_('onPreload_');
+    this.log_('onQueueRemove_');
+    // console.log('onQueueRemove_');
 };
 sampleplayer.CastPlayer.prototype.onQueueEnded_ = function (event) {
-    this.log_('onPreload_');
+    this.log_('onQueueEnded_');
+    // console.log('onQueueEnded_');
+
 };
 sampleplayer.CastPlayer.prototype.onQueueReorder_ = function (event) {
-    this.log_('onPreload_');
+    this.log_('onQueueReorder_');
+    // console.log('onQueueReorder_');
 };
 sampleplayer.CastPlayer.prototype.onQueueUpdate_ = function (event) {
-    this.log_('onPreload_');
+    this.log_('onQueueUpdate_');
+    // console.log('onQueueUpdate_');
 };
 
 
@@ -2263,7 +2265,7 @@ sampleplayer.CastPlayer.prototype.onLoad_ = function (event) {
     this.reachedLastEpisode = false;
     if(!event.senderId || event.senderId == '') {
         console.log('Diagnal Next click', this.nextItem_);
-        /*TODO: removd for test. originally added by Arjun. might need*/
+        /*TODO: removd for test. might need*/
         // if(!this.nextItem_) {
         //     return;
         // }
