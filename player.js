@@ -343,9 +343,9 @@ sampleplayer.CastPlayer = function (element) {
 
     this.mediaManager_.onPreload = this.onPreload_.bind(this);
     // this.mediaManager_.onQueueInsert = this.onQueueInsert_.bind(this);
-    this.mediaManager_.onQueueLoad = this.onQueueLoad_.bind(this);
-    this.mediaManager_.onQueueRemove = this.onQueueRemove_.bind(this);
-    this.mediaManager_.onQueueEnded = this.onQueueEnded_.bind(this);
+    // this.mediaManager_.onQueueLoad = this.onQueueLoad_.bind(this);
+    // this.mediaManager_.onQueueRemove = this.onQueueRemove_.bind(this);
+    // this.mediaManager_.onQueueEnded = this.onQueueEnded_.bind(this);
     // this.mediaManager_.onQueueReorder = this.onQueueReorder_.bind(this);
     // this.mediaManager_.onQueueUpdate = this.onQueueUpdate_.bind(this);
     this.mediaManager_.onCancelPreload = this.onCancelPreload_.bind(this);
@@ -2203,30 +2203,30 @@ sampleplayer.CastPlayer.prototype.onPreload_ = function (event) {
 };
 
 /*TODO: Remove if not needed*/
-sampleplayer.CastPlayer.prototype.onQueueInsert_ = function (event) {
-    this.log_('onQueueInsert_');
-};
-sampleplayer.CastPlayer.prototype.onQueueLoad_ = function (event) {
-    this.log_('onQueueLoad_');
-    // console.log('onQueueLoad_');
-};
-sampleplayer.CastPlayer.prototype.onQueueRemove_ = function (event) {
-    this.log_('onQueueRemove_');
-    // console.log('onQueueRemove_');
-};
-sampleplayer.CastPlayer.prototype.onQueueEnded_ = function (event) {
-    this.log_('onQueueEnded_');
-    // console.log('onQueueEnded_');
-
-};
-sampleplayer.CastPlayer.prototype.onQueueReorder_ = function (event) {
-    this.log_('onQueueReorder_');
-    // console.log('onQueueReorder_');
-};
-sampleplayer.CastPlayer.prototype.onQueueUpdate_ = function (event) {
-    this.log_('onQueueUpdate_');
-    // console.log('onQueueUpdate_');
-};
+// sampleplayer.CastPlayer.prototype.onQueueInsert_ = function (event) {
+//     this.log_('onQueueInsert_');
+// };
+// sampleplayer.CastPlayer.prototype.onQueueLoad_ = function (event) {
+//     this.log_('onQueueLoad_');
+//     // console.log('onQueueLoad_');
+// };
+// sampleplayer.CastPlayer.prototype.onQueueRemove_ = function (event) {
+//     this.log_('onQueueRemove_');
+//     // console.log('onQueueRemove_');
+// };
+// sampleplayer.CastPlayer.prototype.onQueueEnded_ = function (event) {
+//     this.log_('onQueueEnded_');
+//     // console.log('onQueueEnded_');
+//
+// };
+// sampleplayer.CastPlayer.prototype.onQueueReorder_ = function (event) {
+//     this.log_('onQueueReorder_');
+//     // console.log('onQueueReorder_');
+// };
+// sampleplayer.CastPlayer.prototype.onQueueUpdate_ = function (event) {
+//     this.log_('onQueueUpdate_');
+//     // console.log('onQueueUpdate_');
+// };
 
 
 /**
