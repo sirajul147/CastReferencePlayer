@@ -1273,7 +1273,7 @@ sampleplayer.CastPlayer.prototype.queueEpisode_ = function (message, queuePositi
                         images: images,
                         metadataType: 1,
                         title: item.titles.default,
-                        subtitle: item.medium_descriptions.default || item.long_descriptions.default
+                        subtitle: item.descriptions.default || item.medium_descriptions.default || item.long_descriptions.default
                     },
                     customData: customData
                 };
@@ -1293,6 +1293,9 @@ sampleplayer.CastPlayer.prototype.queueEpisode_ = function (message, queuePositi
 
 sampleplayer.CastPlayer.prototype.queuePrevEpisode_ = function (message) {
     var self = this;
+    if(message && message.media && message.media.customData.typeofItem.toLowerCase() !== 'episode') {
+        return true;
+    }
     /**
      * tempQ_ will contain at maximum 2 items, for previous and next items.
      * It will be cleared once queued into google cast queue.
@@ -1307,6 +1310,9 @@ sampleplayer.CastPlayer.prototype.queuePrevEpisode_ = function (message) {
 
 sampleplayer.CastPlayer.prototype.queueNextEpisode_ = function (message) {
     var self = this;
+    if(message && message.media && message.media.customData.typeofItem.toLowerCase() !== 'episode') {
+        return true;
+    }
     this.queueEpisode_(message, 'next').then(function (response) {
         self.queueToCastDevice_();
     });
