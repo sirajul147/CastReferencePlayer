@@ -2047,7 +2047,7 @@ sampleplayer.CastPlayer.prototype.sendProgress_ = function () {
             method: 'PUT',
             body: JSON.stringify({
                 media_id: media.customData.mediaId,
-                progress: Math.round(self.mediaElement_.currentTime)
+                progress: Math.floor(self.mediaElement_.currentTime)
             }),
             headers: {
                 "Content-Type": "application/json",
